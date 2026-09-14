@@ -596,7 +596,7 @@ function el(tag, attrs) {
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp
+    getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ↓↓↓ 여기를 본인의 Firebase 설정값으로 교체하세요 ↓↓↓
@@ -622,55 +622,58 @@ const firebaseConfig = {
     const db = getFirestore(app);
     const memosCol = collection(db, 'demo_memos');
 
-    async function loadMemos() {
-      listEl.innerHTML = '<li class="memo-empty">불러오는 중...</li>';
-      try {
-        const snap = await getDocs(query(memosCol, orderBy('createdAt', 'desc')));
-        if (snap.empty) {
-          listEl.innerHTML = '<li class="memo-empty">아직 저장된 메모가 없습니다.</li>';
-          return;
-        }
-        listEl.innerHTML = '';
-        snap.forEach(doc => {
-          const data = doc.data();
-          const time = data.createdAt ? data.createdAt.toDate().toLocaleString('ko-KR') : '';
-          const li = document.createElement('li');
-          const textSpan = document.createElement('span');
-          textSpan.textContent = data.text;
-          const timeSpan = document.createElement('span');
-          timeSpan.className = 'memo-time';
-          timeSpan.textContent = time;
-          li.appendChild(textSpan);
-          li.appendChild(timeSpan);
-          listEl.appendChild(li);
-        });
-      } catch (err) {
+    function renderMemos(snap) {
+      if (snap.empty) {
+        listEl.innerHTML = '<li class="memo-empty">아직 저장된 메모가 없습니다.</li>';
+        return;
+      }
+      listEl.innerHTML = '';
+      snap.forEach(doc => {
+        const data = doc.data();
+        const time = data.createdAt ? data.createdAt.toDate().toLocaleString('ko-KR') : '저장 중...';
+        const li = document.createElement('li');
+        const textSpan = document.createElement('span');
+        textSpan.textContent = data.text;
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'memo-time';
+        timeSpan.textContent = time;
+        li.appendChild(textSpan);
+        li.appendChild(timeSpan);
+        listEl.appendChild(li);
+      });
+    }
+
+    // getDocs로 매번 다시 불러오는 대신, onSnapshot으로 한 번만 구독합니다.
+    // 저장되는 순간 서버가 알아서 밀어주기 때문에 클릭할 때마다 왕복하지 않아
+    // 체감 속도가 훨씬 빨라지고, 다른 탭/기기에서 저장해도 실시간으로 반영됩니다.
+    listEl.innerHTML = '<li class="memo-empty">불러오는 중...</li>';
+    onSnapshot(
+      query(memosCol, orderBy('createdAt', 'desc')),
+      renderMemos,
+      (err) => {
         listEl.innerHTML = '<li class="memo-empty">불러오기 실패 — Firestore 설정/보안규칙을 확인하세요.</li>';
         console.error(err);
       }
-    }
+    );
 
     btnEl.addEventListener('click', async () => {
       const text = inputEl.value.trim();
       if (!text) return;
+      inputEl.value = '';
       btnEl.disabled = true;
       statusEl.textContent = '저장 중...';
       try {
         await addDoc(memosCol, { text, createdAt: serverTimestamp() });
-        inputEl.value = '';
         statusEl.textContent = '저장 완료!';
-        await loadMemos();
       } catch (err) {
         statusEl.textContent = '저장 실패 — Firestore 설정/보안규칙을 확인하세요.';
         console.error(err);
       } finally {
         btnEl.disabled = false;
-        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+        setTimeout(() => { statusEl.textContent = ''; }, 1500);
       }
     });
     inputEl.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') btnEl.click(); });
-
-    loadMemos();
   }
 </script>
 
