@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2G 네트웍스 대시보드</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --series-1:       #2a78d6; /* 매입 */
+    --series-2:       #eb6834; /* 판매 */
+    --pos:            #2a78d6; /* 순수익 (+) */
+    --neg:            #e34948; /* 순수익 (-) */
+    --border:         rgba(11,11,11,0.10);
+    --tile-bg:        #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --pos:            #3987e5;
+      --neg:            #e66767;
+      --border:         rgba(255,255,255,0.10);
+      --tile-bg:        #232322;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --pos:            #3987e5;
+    --neg:            #e66767;
+    --border:         rgba(255,255,255,0.10);
+    --tile-bg:        #232322;
+  }
+
+  * { box-sizing: border-box; }
+  .viz-root {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
+  .note { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 700px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+  .tile {
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px;
+  }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .tile .value { font-size: 22px; font-weight: 700; }
+  .tile .value.pos { color: var(--pos); }
+  .tile .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .panel {
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 16px 8px;
+    margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 14px; font-weight: 700; margin: 0 0 2px; }
+  .panel .panel-sub { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .scroll-x { overflow-x: auto; padding-bottom: 6px; }
+  .chart-svg-wrap { position: relative; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    opacity: 0;
+    transform: translate(-50%, -100%);
+    transition: opacity 0.08s ease;
+    z-index: 50;
+    white-space: nowrap;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip b { font-weight: 700; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0;
+    background: var(--tile-bg);
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  thead th:first-child, tbody td:first-child { text-align: left; }
+  tbody td {
+    text-align: right;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--grid);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+  .table-scroll { max-height: 480px; overflow-y: auto; border-radius: 6px; }
+  .profit-pos { color: var(--pos); }
+  .profit-neg { color: var(--neg); }
+  .foot-star { color: var(--text-muted); }
+
+  footer.notes { margin-top: 4px; }
+  footer.notes ul { margin: 6px 0 0; padding-left: 18px; }
+  footer.notes li { margin-bottom: 3px; }
+
+  /* ---- Firebase 저장 체험 패널 ---- */
+  #firebase-demo-panel { border: 1px dashed var(--series-1); }
+  #firebase-demo-panel h2 { display: flex; align-items: center; gap: 6px; }
+  .memo-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .memo-row input {
+    flex: 1; min-width: 200px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-1); color: var(--text-primary); font-size: 13px;
+  }
+  .memo-row button {
+    padding: 8px 18px; border: none; border-radius: 6px;
+    background: var(--series-1); color: #fff; cursor: pointer;
+    font-weight: 600; font-size: 13px;
+  }
+  .memo-row button:disabled { opacity: 0.5; cursor: default; }
+  #memo-status { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; min-height: 16px; }
+  #memo-list { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+  #memo-list li {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--grid);
+  }
+  #memo-list li.memo-empty { color: var(--text-muted); justify-content: flex-start; }
+  #memo-list .memo-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="viz-root">
+  <div class="wrap">
+    <h1>A2G 네트웍스 대시보드</h1>
+    <p class="subtitle">2026-01-01 ~ 2026-09-13 (2026년 이후 자료) · 「월별판매현황」 시트 기준, 매입일자 / 매도일자(또는 입금일자) 기준 집계</p>
+
+    <div class="panel">
+      <h2>월별 지표</h2>
+      <p class="panel-sub">2026년 1월 ~ 9월, 대수(매입/판매) · 매출(판매금액)</p>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매입 대수</span>
+        <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>판매 대수</span>
+      </div>
+      <div class="scroll-x">
+        <div class="chart-svg-wrap" id="chart-month-count-wrap"></div>
+      </div>
+      <div class="legend" style="margin-top:14px;">
+        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매출(판매금액)</span>
+      </div>
+      <div class="scroll-x">
+        <div class="chart-svg-wrap" id="chart-month-rev-wrap"></div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">총 매입 대수</div>
+        <div class="value" id="tile-buy">-</div>
+        <div class="sub" id="tile-buy-amt">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">총 판매 대수</div>
+        <div class="value" id="tile-sell">-</div>
+        <div class="sub" id="tile-sell-amt">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">누적 순수익</div>
+        <div class="value pos" id="tile-profit">-</div>
+        <div class="sub" id="tile-margin">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">주당 평균</div>
+        <div class="value" id="tile-avg">-</div>
+        <div class="sub">매입 / 판매 대수</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>주별 매입 · 판매 대수</h2>
+      <p class="panel-sub">대(臺) 단위, 주 시작일(월요일) 기준</p>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매입 대수</span>
+        <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>판매 대수</span>
+      </div>
+      <div class="scroll-x">
+        <div class="chart-svg-wrap" id="chart1-wrap"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>주별 순수익</h2>
+      <p class="panel-sub">판매금액 − 총 매입원가(부대비용 포함) 기준, 원(₩)</p>
+      <div class="scroll-x">
+        <div class="chart-svg-wrap" id="chart2-wrap"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>주별 상세 표</h2>
+      <p class="panel-sub">스크롤하여 전체 37주 확인 가능</p>
+      <div class="table-scroll">
+        <table id="data-table">
+          <thead>
+            <tr>
+              <th>주(기간)</th>
+              <th>매입 대수</th>
+              <th>판매 대수</th>
+              <th>순수익(원)</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="firebase-demo-panel">
+      <h2>🧪 저장 기능 체험 (Firebase 연동)</h2>
+      <p class="panel-sub">아래에 메모를 입력하고 저장해보세요. 새로고침하거나 다른 기기·브라우저로 접속해도 남아있다면, 브라우저가 아니라 서버(DB)에 저장된 것입니다 — 이게 바로 BE(백엔드)의 역할입니다.</p>
+      <div class="memo-row">
+        <input id="memo-input" type="text" placeholder="예: 9월 3주차 목표 15대" maxlength="200">
+        <button id="memo-save-btn" type="button">저장</button>
+      </div>
+      <div id="memo-status"></div>
+      <ul id="memo-list"><li class="memo-empty">Firebase 설정을 입력하면 여기에 저장된 메모가 표시됩니다.</li></ul>
+    </div>
+
+    <footer class="notes">
+      <p class="note">※ 데이터 산출 기준 및 참고사항</p>
+      <ul class="note">
+        <li>2026년 1월 1일 이후 자료만 포함했습니다 (2025년 매입·매도 건은 제외).</li>
+        <li>매입 대수는 「월별판매현황」 시트의 <b>매입일자</b> 기준, 판매 대수·순수익·매출은 <b>매도일자</b>(없는 경우 입금일자) 기준으로 집계했습니다. 월별 지표는 해당 월의 달력 기준, 주별 지표는 월요일 시작 기준입니다.</li>
+        <li>매출은 판매금액(부대비용 차감 전) 합계이며, 순수익 = 매도금액 − 총 차대금(계약매입금액 + 알선수수료 + 취득세 + 성능비 등 부대경비 합계)입니다.</li>
+        <li>계약 취소/환불 처리된 건은 매입 대수에서 제외했습니다.</li>
+        <li>1건(BMW520d, 397수1388, 2026-02 매도)은 원본 파일의 매도금액 셀이 손상되어("2/2+Y60:AG60") 값을 확인할 수 없어 판매 대수에는 포함하되 순수익·매출 계산에서는 제외했습니다.</li>
+        <li>차량 1대(폴로, 14오0767)는 매입일자가 비어 있어 「26년9월09일」 일일업무현황 시트의 현금출납 내역("9/3 김경록-폴로(14오0767) 차량매입대금")을 참고해 9/3로 보완했습니다.</li>
+        <li>거래내역_28004(이전비)·27304(운영비) 계좌 파일은 2026-09-09 하루치 은행 거래내역으로, 해당 일자 일일업무현황 검증용 자료이며 이번 집계에는 직접 반영하지 않았습니다.</li>
+      </ul>
+    </footer>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {"weeks":[{"week_start":"2025-12-29","week_end":"2026-01-04","label":"12/29~1/4","buy_count":3,"buy_amt":34411184,"sell_count":0,"sell_revenue":0,"sell_cost":0,"profit":0,"unknown_profit_count":0},{"week_start":"2026-01-05","week_end":"2026-01-11","label":"1/5~1/11","buy_count":8,"buy_amt":222491261,"sell_count":7,"sell_revenue":291914440,"sell_cost":289970390,"profit":1944050,"unknown_profit_count":0},{"week_start":"2026-01-12","week_end":"2026-01-18","label":"1/12~1/18","buy_count":8,"buy_amt":91288234,"sell_count":8,"sell_revenue":92540000,"sell_cost":87695990,"profit":4844010,"unknown_profit_count":0},{"week_start":"2026-01-19","week_end":"2026-01-25","label":"1/19~1/25","buy_count":6,"buy_amt":96615277,"sell_count":3,"sell_revenue":38990000,"sell_cost":35811214,"profit":3178786,"unknown_profit_count":0},{"week_start":"2026-01-26","week_end":"2026-02-01","label":"1/26~2/1","buy_count":17,"buy_amt":210501234,"sell_count":9,"sell_revenue":91340000,"sell_cost":81672175,"profit":9667825,"unknown_profit_count":0},{"week_start":"2026-02-02","week_end":"2026-02-08","label":"2/2~2/8","buy_count":7,"buy_amt":146615350,"sell_count":11,"sell_revenue":93200000,"sell_cost":83147261,"profit":10052739,"unknown_profit_count":1},{"week_start":"2026-02-09","week_end":"2026-02-15","label":"2/9~2/15","buy_count":16,"buy_amt":170025653,"sell_count":10,"sell_revenue":189169900,"sell_cost":180870645,"profit":8299255,"unknown_profit_count":0},{"week_start":"2026-02-16","week_end":"2026-02-22","label":"2/16~2/22","buy_count":4,"buy_amt":37377320,"sell_count":6,"sell_revenue":86400000,"sell_cost":81910580,"profit":4489420,"unknown_profit_count":0},{"week_start":"2026-02-23","week_end":"2026-03-01","label":"2/23~3/1","buy_count":13,"buy_amt":113341341,"sell_count":8,"sell_revenue":71300000,"sell_cost":61911374,"profit":9388626,"unknown_profit_count":0},{"week_start":"2026-03-02","week_end":"2026-03-08","label":"3/2~3/8","buy_count":10,"buy_amt":75840051,"sell_count":8,"sell_revenue":90750000,"sell_cost":82465446,"profit":8284554,"unknown_profit_count":0},{"week_start":"2026-03-09","week_end":"2026-03-15","label":"3/9~3/15","buy_count":16,"buy_amt":307429513,"sell_count":13,"sell_revenue":149490000,"sell_cost":139997080,"profit":9492920,"unknown_profit_count":0},{"week_start":"2026-03-16","week_end":"2026-03-22","label":"3/16~3/22","buy_count":21,"buy_amt":426211785,"sell_count":17,"sell_revenue":512813780,"sell_cost":495580251,"profit":17233529,"unknown_profit_count":0},{"week_start":"2026-03-23","week_end":"2026-03-29","label":"3/23~3/29","buy_count":11,"buy_amt":109896337,"sell_count":11,"sell_revenue":224540000,"sell_cost":224724373,"profit":-184373,"unknown_profit_count":0},{"week_start":"2026-03-30","week_end":"2026-04-05","label":"3/30~4/5","buy_count":12,"buy_amt":97593731,"sell_count":8,"sell_revenue":83900000,"sell_cost":75774500,"profit":8125500,"unknown_profit_count":0},{"week_start":"2026-04-06","week_end":"2026-04-12","label":"4/6~4/12","buy_count":16,"buy_amt":316078087,"sell_count":16,"sell_revenue":158000000,"sell_cost":147632535,"profit":10367465,"unknown_profit_count":0},{"week_start":"2026-04-13","week_end":"2026-04-19","label":"4/13~4/19","buy_count":12,"buy_amt":251616101,"sell_count":15,"sell_revenue":295407380,"sell_cost":282572361,"profit":12835019,"unknown_profit_count":0},{"week_start":"2026-04-20","week_end":"2026-04-26","label":"4/20~4/26","buy_count":9,"buy_amt":80965210,"sell_count":11,"sell_revenue":203642000,"sell_cost":193661364,"profit":9980636,"unknown_profit_count":0},{"week_start":"2026-04-27","week_end":"2026-05-03","label":"4/27~5/3","buy_count":5,"buy_amt":101524730,"sell_count":13,"sell_revenue":235676040,"sell_cost":237470682,"profit":-1794642,"unknown_profit_count":0},{"week_start":"2026-05-04","week_end":"2026-05-10","label":"5/4~5/10","buy_count":5,"buy_amt":64133890,"sell_count":5,"sell_revenue":89100000,"sell_cost":84576150,"profit":4523850,"unknown_profit_count":0},{"week_start":"2026-05-11","week_end":"2026-05-17","label":"5/11~5/17","buy_count":6,"buy_amt":56536310,"sell_count":19,"sell_revenue":238200000,"sell_cost":222484468,"profit":15715532,"unknown_profit_count":0},{"week_start":"2026-05-18","week_end":"2026-05-24","label":"5/18~5/24","buy_count":10,"buy_amt":141369780,"sell_count":15,"sell_revenue":133950000,"sell_cost":132526971,"profit":1423029,"unknown_profit_count":0},{"week_start":"2026-05-25","week_end":"2026-05-31","label":"5/25~5/31","buy_count":9,"buy_amt":54751720,"sell_count":4,"sell_revenue":30100000,"sell_cost":28665820,"profit":1434180,"unknown_profit_count":0},{"week_start":"2026-06-01","week_end":"2026-06-07","label":"6/1~6/7","buy_count":11,"buy_amt":97039270,"sell_count":9,"sell_revenue":82660000,"sell_cost":73710350,"profit":8949650,"unknown_profit_count":0},{"week_start":"2026-06-08","week_end":"2026-06-14","label":"6/8~6/14","buy_count":16,"buy_amt":127708740,"sell_count":8,"sell_revenue":98700000,"sell_cost":88446570,"profit":10253430,"unknown_profit_count":0},{"week_start":"2026-06-15","week_end":"2026-06-21","label":"6/15~6/21","buy_count":7,"buy_amt":40208240,"sell_count":15,"sell_revenue":116700000,"sell_cost":101098020,"profit":15601980,"unknown_profit_count":0},{"week_start":"2026-06-22","week_end":"2026-06-28","label":"6/22~6/28","buy_count":20,"buy_amt":165003930,"sell_count":12,"sell_revenue":123228310,"sell_cost":106704330,"profit":16523980,"unknown_profit_count":0},{"week_start":"2026-06-29","week_end":"2026-07-05","label":"6/29~7/5","buy_count":10,"buy_amt":110182640,"sell_count":7,"sell_revenue":54800000,"sell_cost":47746180,"profit":7053820,"unknown_profit_count":0},{"week_start":"2026-07-06","week_end":"2026-07-12","label":"7/6~7/12","buy_count":4,"buy_amt":44003170,"sell_count":12,"sell_revenue":123600000,"sell_cost":114411340,"profit":9188660,"unknown_profit_count":0},{"week_start":"2026-07-13","week_end":"2026-07-19","label":"7/13~7/19","buy_count":5,"buy_amt":41986210,"sell_count":12,"sell_revenue":103060000,"sell_cost":95012010,"profit":8047990,"unknown_profit_count":0},{"week_start":"2026-07-20","week_end":"2026-07-26","label":"7/20~7/26","buy_count":13,"buy_amt":101472600,"sell_count":12,"sell_revenue":67200000,"sell_cost":61138350,"profit":6061650,"unknown_profit_count":0},{"week_start":"2026-07-27","week_end":"2026-08-02","label":"7/27~8/2","buy_count":5,"buy_amt":47397090,"sell_count":9,"sell_revenue":125700000,"sell_cost":111034240,"profit":14665760,"unknown_profit_count":0},{"week_start":"2026-08-03","week_end":"2026-08-09","label":"8/3~8/9","buy_count":12,"buy_amt":128241900,"sell_count":5,"sell_revenue":39000000,"sell_cost":34983610,"profit":4016390,"unknown_profit_count":0},{"week_start":"2026-08-10","week_end":"2026-08-16","label":"8/10~8/16","buy_count":7,"buy_amt":82930300,"sell_count":4,"sell_revenue":52800000,"sell_cost":51064700,"profit":1735300,"unknown_profit_count":0},{"week_start":"2026-08-17","week_end":"2026-08-23","label":"8/17~8/23","buy_count":5,"buy_amt":70311680,"sell_count":5,"sell_revenue":70400000,"sell_cost":65736880,"profit":4663120,"unknown_profit_count":0},{"week_start":"2026-08-24","week_end":"2026-08-30","label":"8/24~8/30","buy_count":3,"buy_amt":17621250,"sell_count":8,"sell_revenue":121200000,"sell_cost":111274040,"profit":9925960,"unknown_profit_count":0},{"week_start":"2026-08-31","week_end":"2026-09-06","label":"8/31~9/6","buy_count":8,"buy_amt":97159160,"sell_count":7,"sell_revenue":103500000,"sell_cost":98314470,"profit":5185530,"unknown_profit_count":0},{"week_start":"2026-09-07","week_end":"2026-09-13","label":"9/7~9/13","buy_count":4,"buy_amt":36226360,"sell_count":8,"sell_revenue":98600000,"sell_cost":93993340,"profit":4606660,"unknown_profit_count":0}],"months":[{"year":2026,"month":1,"label":"2026.01","buy_count":42,"buy_amt":655307190,"sell_count":27,"sell_revenue":514784440,"sell_cost":495149769,"profit":19634671,"unknown_profit_count":0},{"year":2026,"month":2,"label":"2026.02","buy_count":40,"buy_amt":467359664,"sell_count":35,"sell_revenue":440069900,"sell_cost":407839860,"profit":32230040,"unknown_profit_count":1},{"year":2026,"month":3,"label":"2026.03","buy_count":60,"buy_amt":941393086,"sell_count":52,"sell_revenue":1000593780,"sell_cost":964790620,"profit":35803160,"unknown_profit_count":0},{"year":2026,"month":4,"label":"2026.04","buy_count":52,"buy_amt":825762459,"sell_count":60,"sell_revenue":953625420,"sell_cost":915087972,"profit":38537448,"unknown_profit_count":0},{"year":2026,"month":5,"label":"2026.05","buy_count":30,"buy_amt":316791700,"sell_count":43,"sell_revenue":491350000,"sell_cost":468253409,"profit":23096591,"unknown_profit_count":0},{"year":2026,"month":6,"label":"2026.06","buy_count":58,"buy_amt":452008290,"sell_count":46,"sell_revenue":433188310,"sell_cost":379714430,"profit":53473880,"unknown_profit_count":0},{"year":2026,"month":7,"label":"2026.07","buy_count":33,"buy_amt":322993600,"sell_count":50,"sell_revenue":462460000,"sell_cost":419586960,"profit":42873040,"unknown_profit_count":0},{"year":2026,"month":8,"label":"2026.08","buy_count":27,"buy_amt":299105130,"sell_count":22,"sell_revenue":283400000,"sell_cost":263059230,"profit":20340770,"unknown_profit_count":0},{"year":2026,"month":9,"label":"2026.09","buy_count":12,"buy_amt":133385520,"sell_count":15,"sell_revenue":202100000,"sell_cost":192307810,"profit":9792190,"unknown_profit_count":0}],"totals":{"weeks":37,"buy_count":354,"buy_amt":4414106639,"sell_count":350,"sell_revenue":4781571850,"sell_cost":4505790060,"profit":275781790,"unknown_profit_count":1},"cancelled":7}
+;
+
+const weeks = DATA.weeks;
+const months = DATA.months;
+const totals = DATA.totals;
+
+function fmtWon(n) {
+  return (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('ko-KR') + '원';
+}
+function fmtNum(n) { return n.toLocaleString('ko-KR'); }
+
+// ---- Stat tiles ----
+document.getElementById('tile-buy').textContent = fmtNum(totals.buy_count) + '대';
+document.getElementById('tile-buy-amt').textContent = '매입금액 ' + fmtWon(totals.buy_amt);
+document.getElementById('tile-sell').textContent = fmtNum(totals.sell_count) + '대';
+document.getElementById('tile-sell-amt').textContent = '판매금액 ' + fmtWon(totals.sell_revenue);
+document.getElementById('tile-profit').textContent = fmtWon(totals.profit);
+const margin = (totals.profit / totals.sell_revenue * 100).toFixed(1);
+document.getElementById('tile-margin').textContent = '판매금액 대비 ' + margin + '%';
+document.getElementById('tile-avg').textContent =
+  (totals.buy_count / totals.weeks).toFixed(1) + ' / ' + (totals.sell_count / totals.weeks).toFixed(1);
+
+// ---- Tooltip helper ----
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(x, y, html) {
+  tooltipEl.innerHTML = html;
+  tooltipEl.style.left = x + 'px';
+  tooltipEl.style.top = (y - 10) + 'px';
+  tooltipEl.classList.add('show');
+}
+function hideTooltip() { tooltipEl.classList.remove('show'); }
+
+// ---- Nice scale helper ----
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const norm = v / mag;
+  let step;
+  if (norm <= 1) step = 1;
+  else if (norm <= 2) step = 2;
+  else if (norm <= 5) step = 5;
+  else step = 10;
+  return step * mag;
+}
+
+const svgNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs) {
+  const e = document.createElementNS(svgNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+// ================= Monthly chart A: grouped bar (buy vs sell count) =================
+(function () {
+  const groupW = 76;
+  const barW = 26;
+  const gap = 4;
+  const leftPad = 40, rightPad = 12, topPad = 12, bottomPad = 24;
+  const chartH = 180;
+  const width = months.length * groupW + leftPad + rightPad;
+  const height = chartH + topPad + bottomPad;
+
+  const maxCount = niceMax(Math.max(...months.map(m => Math.max(m.buy_count, m.sell_count))));
+  const yScale = v => chartH - (v / maxCount) * chartH;
+
+  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
+
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = Math.round(maxCount * i / ticks);
+    const y = topPad + yScale(v);
+    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
+    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
+    t.textContent = v;
+    svg.appendChild(t);
+  }
+  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
+
+  months.forEach((mo, i) => {
+    const gx = leftPad + i * groupW;
+    const bBuy = el('rect', {
+      x: gx + (groupW - (barW * 2 + gap)) / 2,
+      y: topPad + yScale(mo.buy_count),
+      width: barW,
+      height: chartH - yScale(mo.buy_count),
+      rx: 3, fill: 'var(--series-1)'
+    });
+    const bSell = el('rect', {
+      x: gx + (groupW - (barW * 2 + gap)) / 2 + barW + gap,
+      y: topPad + yScale(mo.sell_count),
+      width: barW,
+      height: chartH - yScale(mo.sell_count),
+      rx: 3, fill: 'var(--series-2)'
+    });
+    [bBuy, bSell].forEach(b => {
+      b.style.cursor = 'pointer';
+      b.addEventListener('mousemove', (ev) => {
+        showTooltip(ev.clientX, ev.clientY, `<b>${mo.label}</b><br>매입 ${mo.buy_count}대 · 판매 ${mo.sell_count}대`);
+      });
+      b.addEventListener('mouseleave', hideTooltip);
+    });
+    svg.appendChild(bBuy);
+    svg.appendChild(bSell);
+
+    const t = el('text', { x: gx + groupW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-muted)' });
+    t.textContent = mo.label.slice(5) + '월';
+    svg.appendChild(t);
+  });
+
+  document.getElementById('chart-month-count-wrap').appendChild(svg);
+})();
+
+// ================= Monthly chart B: revenue bar =================
+(function () {
+  const groupW = 76;
+  const barW = 40;
+  const leftPad = 64, rightPad = 12, topPad = 12, bottomPad = 24;
+  const chartH = 160;
+  const width = months.length * groupW + leftPad + rightPad;
+  const height = chartH + topPad + bottomPad;
+
+  const maxRev = niceMax(Math.max(...months.map(m => m.sell_revenue)));
+  const yScale = v => chartH - (v / maxRev) * chartH;
+
+  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
+
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = Math.round(maxRev * i / ticks);
+    const y = topPad + yScale(v);
+    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
+    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
+    t.textContent = (v / 100000000).toFixed(1) + '억';
+    svg.appendChild(t);
+  }
+  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
+
+  months.forEach((mo, i) => {
+    const gx = leftPad + i * groupW + (groupW - barW) / 2;
+    const rect = el('rect', {
+      x: gx, y: topPad + yScale(mo.sell_revenue), width: barW,
+      height: chartH - yScale(mo.sell_revenue),
+      rx: 3, fill: 'var(--series-1)'
+    });
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('mousemove', (ev) => {
+      showTooltip(ev.clientX, ev.clientY, `<b>${mo.label}</b><br>매출 ${fmtWon(mo.sell_revenue)}`);
+    });
+    rect.addEventListener('mouseleave', hideTooltip);
+    svg.appendChild(rect);
+
+    const t = el('text', { x: gx + barW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-muted)' });
+    t.textContent = mo.label.slice(5) + '월';
+    svg.appendChild(t);
+  });
+
+  document.getElementById('chart-month-rev-wrap').appendChild(svg);
+})();
+
+// ================= Chart 1: grouped bar (buy vs sell count) =================
+(function () {
+  const groupW = 34;
+  const barW = 12;
+  const gap = 2;
+  const leftPad = 40, rightPad = 12, topPad = 12, bottomPad = 28;
+  const chartH = 200;
+  const width = weeks.length * groupW + leftPad + rightPad;
+  const height = chartH + topPad + bottomPad;
+
+  const maxCount = niceMax(Math.max(...weeks.map(w => Math.max(w.buy_count, w.sell_count))));
+  const yScale = v => chartH - (v / maxCount) * chartH;
+
+  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
+
+  // gridlines + y ticks
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const v = Math.round(maxCount * i / ticks);
+    const y = topPad + yScale(v);
+    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
+    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
+    t.textContent = v;
+    svg.appendChild(t);
+  }
+  // baseline
+  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
+
+  weeks.forEach((w, i) => {
+    const gx = leftPad + i * groupW;
+    const bBuy = el('rect', {
+      x: gx + (groupW - (barW * 2 + gap)) / 2,
+      y: topPad + yScale(w.buy_count),
+      width: barW,
+      height: chartH - yScale(w.buy_count),
+      rx: 3, fill: 'var(--series-1)', class: 'bar'
+    });
+    const bSell = el('rect', {
+      x: gx + (groupW - (barW * 2 + gap)) / 2 + barW + gap,
+      y: topPad + yScale(w.sell_count),
+      width: barW,
+      height: chartH - yScale(w.sell_count),
+      rx: 3, fill: 'var(--series-2)', class: 'bar'
+    });
+    [bBuy, bSell].forEach(b => {
+      b.style.cursor = 'pointer';
+      b.addEventListener('mousemove', (ev) => {
+        showTooltip(ev.clientX, ev.clientY, `<b>${w.label}</b><br>매입 ${w.buy_count}대 · 판매 ${w.sell_count}대`);
+      });
+      b.addEventListener('mouseleave', hideTooltip);
+    });
+    svg.appendChild(bBuy);
+    svg.appendChild(bSell);
+
+    // x label every ~4 weeks to avoid crowding
+    if (i % 4 === 0 || i === weeks.length - 1) {
+      const t = el('text', { x: gx + groupW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 9, fill: 'var(--text-muted)' });
+      t.textContent = w.label;
+      svg.appendChild(t);
+    }
+  });
+
+  document.getElementById('chart1-wrap').appendChild(svg);
+})();
+
+// ================= Chart 2: diverging bar (profit) =================
+(function () {
+  const groupW = 34;
+  const barW = 16;
+  const leftPad = 56, rightPad = 12, topPad = 12, bottomPad = 28;
+  const chartH = 220;
+  const width = weeks.length * groupW + leftPad + rightPad;
+  const height = chartH + topPad + bottomPad;
+
+  const maxAbs = niceMax(Math.max(...weeks.map(w => Math.abs(w.profit))));
+  const zeroY = topPad + chartH / 2;
+  const yScale = v => (v / maxAbs) * (chartH / 2);
+
+  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
+
+  const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs];
+  ticks.forEach(v => {
+    const y = zeroY - yScale(v);
+    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: v === 0 ? 'var(--baseline)' : 'var(--grid)', 'stroke-width': 1 }));
+    const t = el('text', { x: leftPad - 8, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: 'var(--text-muted)' });
+    t.textContent = (v / 10000).toLocaleString('ko-KR') + '만';
+    svg.appendChild(t);
+  });
+
+  weeks.forEach((w, i) => {
+    const gx = leftPad + i * groupW + (groupW - barW) / 2;
+    const isPos = w.profit >= 0;
+    const barH = Math.abs(yScale(w.profit));
+    const y = isPos ? zeroY - barH : zeroY;
+    const rect = el('rect', {
+      x: gx, y: y, width: barW, height: Math.max(barH, 0.5),
+      fill: isPos ? 'var(--pos)' : 'var(--neg)',
+      rx: 3
+    });
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('mousemove', (ev) => {
+      showTooltip(ev.clientX, ev.clientY, `<b>${w.label}</b><br>순수익 ${fmtWon(w.profit)}`);
+    });
+    rect.addEventListener('mouseleave', hideTooltip);
+    svg.appendChild(rect);
+
+    if (i % 4 === 0 || i === weeks.length - 1) {
+      const t = el('text', { x: gx + barW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 9, fill: 'var(--text-muted)' });
+      t.textContent = w.label;
+      svg.appendChild(t);
+    }
+  });
+
+  document.getElementById('chart2-wrap').appendChild(svg);
+})();
+
+// ================= Table =================
+(function () {
+  const tbody = document.getElementById('table-body');
+  weeks.forEach(w => {
+    const tr = document.createElement('tr');
+    const profitClass = w.profit > 0 ? 'profit-pos' : (w.profit < 0 ? 'profit-neg' : '');
+    tr.innerHTML = `
+      <td>${w.week_start.slice(2).replace(/-/g,'.')} ~ ${w.week_end.slice(2).replace(/-/g,'.')}</td>
+      <td>${fmtNum(w.buy_count)}</td>
+      <td>${fmtNum(w.sell_count)}</td>
+      <td class="${profitClass}">${w.sell_count > 0 ? fmtWon(w.profit) : '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+})();
+</script>
+
+<!-- =========================================================
+     🧪 저장 기능 체험: Firebase Firestore 연동
+     - 아래 firebaseConfig 값을 Firebase 콘솔에서 발급받은 값으로 교체하세요.
+     - console.firebase.google.com → 프로젝트 생성 → Firestore Database 활성화
+       → 프로젝트 개요에서 "</>" (웹 앱 추가) → 표시되는 설정값을 아래에 붙여넣기
+     - 이 블록만 지우면 원래 대시보드로 완전히 되돌아갑니다.
+     ========================================================= -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ↓↓↓ 여기를 본인의 Firebase 설정값으로 교체하세요 ↓↓↓
+const firebaseConfig = {
+  apiKey: "AIzaSyCEU9wLMNMgw0L3D56nIjhZ2mMfHbE37-4",
+  authDomain: "betest-3ff00.firebaseapp.com",
+  projectId: "betest-3ff00",
+  storageBucket: "betest-3ff00.firebasestorage.app",
+  messagingSenderId: "789251141661",
+  appId: "1:789251141661:web:447a1ffcd0716670dcd6f4"
+};
+  // ↑↑↑ 여기까지 ↑↑↑
+
+  const inputEl = document.getElementById('memo-input');
+  const btnEl = document.getElementById('memo-save-btn');
+  const listEl = document.getElementById('memo-list');
+  const statusEl = document.getElementById('memo-status');
+
+  if (firebaseConfig.apiKey.startsWith('여기에')) {
+    statusEl.textContent = '⚠️ 아직 Firebase 설정값이 입력되지 않았습니다 (index.html 하단 firebaseConfig 참고).';
+  } else {
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const memosCol = collection(db, 'demo_memos');
+
+    async function loadMemos() {
+      listEl.innerHTML = '<li class="memo-empty">불러오는 중...</li>';
+      try {
+        const snap = await getDocs(query(memosCol, orderBy('createdAt', 'desc')));
+        if (snap.empty) {
+          listEl.innerHTML = '<li class="memo-empty">아직 저장된 메모가 없습니다.</li>';
+          return;
+        }
+        listEl.innerHTML = '';
+        snap.forEach(doc => {
+          const data = doc.data();
+          const time = data.createdAt ? data.createdAt.toDate().toLocaleString('ko-KR') : '';
+          const li = document.createElement('li');
+          const textSpan = document.createElement('span');
+          textSpan.textContent = data.text;
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'memo-time';
+          timeSpan.textContent = time;
+          li.appendChild(textSpan);
+          li.appendChild(timeSpan);
+          listEl.appendChild(li);
+        });
+      } catch (err) {
+        listEl.innerHTML = '<li class="memo-empty">불러오기 실패 — Firestore 설정/보안규칙을 확인하세요.</li>';
+        console.error(err);
+      }
+    }
+
+    btnEl.addEventListener('click', async () => {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      btnEl.disabled = true;
+      statusEl.textContent = '저장 중...';
+      try {
+        await addDoc(memosCol, { text, createdAt: serverTimestamp() });
+        inputEl.value = '';
+        statusEl.textContent = '저장 완료!';
+        await loadMemos();
+      } catch (err) {
+        statusEl.textContent = '저장 실패 — Firestore 설정/보안규칙을 확인하세요.';
+        console.error(err);
+      } finally {
+        btnEl.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      }
+    });
+    inputEl.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') btnEl.click(); });
+
+    loadMemos();
+  }
+</script>
+
+</body>
+</html>
