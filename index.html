@@ -1,681 +1,421 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>A2G 네트웍스 대시보드</title>
+<title>랜덤 챔피언 뽑기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
-  .viz-root {
-    color-scheme: light;
-    --surface-1:      #fcfcfb;
-    --page:           #f9f9f7;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --grid:           #e1e0d9;
-    --baseline:       #c3c2b7;
-    --series-1:       #2a78d6; /* 매입 */
-    --series-2:       #eb6834; /* 판매 */
-    --pos:            #2a78d6; /* 순수익 (+) */
-    --neg:            #e34948; /* 순수익 (-) */
-    --border:         rgba(11,11,11,0.10);
-    --tile-bg:        #ffffff;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) .viz-root {
-      color-scheme: dark;
-      --surface-1:      #1a1a19;
-      --page:           #0d0d0d;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --grid:           #2c2c2a;
-      --baseline:       #383835;
-      --series-1:       #3987e5;
-      --series-2:       #d95926;
-      --pos:            #3987e5;
-      --neg:            #e66767;
-      --border:         rgba(255,255,255,0.10);
-      --tile-bg:        #232322;
-    }
-  }
-  :root[data-theme="dark"] .viz-root {
-    color-scheme: dark;
-    --surface-1:      #1a1a19;
-    --page:           #0d0d0d;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --grid:           #2c2c2a;
-    --baseline:       #383835;
-    --series-1:       #3987e5;
-    --series-2:       #d95926;
-    --pos:            #3987e5;
-    --neg:            #e66767;
-    --border:         rgba(255,255,255,0.10);
-    --tile-bg:        #232322;
-  }
+/* Layout: 헥스테크 금속 프레임 안에 중앙 카드 하나. 위에 직업 필터, 아래에 최근 뽑은 기록. */
+:root {
+  --bg: #050b14;
+  --panel: #0b1626;
+  --panel-2: #101f34;
+  --line: #3a3322;
+  --gold: #c8aa6e;
+  --gold-hi: #f0e6d2;
+  --cyan: #0ac8b9;
+  --text: #d6dde8;
+  --muted: #8794a8;
+  --display: "Cinzel", "Times New Roman", serif;
+  --body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background:
+    radial-gradient(900px 500px at 50% -10%, #12335a55, transparent 70%),
+    radial-gradient(600px 400px at 90% 110%, #0ac8b922, transparent 70%),
+    var(--bg);
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100%;
+  padding-block: 28px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--display); letter-spacing: .28em; font-size: 11px; color: var(--cyan); text-transform: uppercase; }
+h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(26px, 7vw, 36px); letter-spacing: .06em; color: var(--gold-hi); text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); font-size: 13px; }
 
-  * { box-sizing: border-box; }
-  .viz-root {
-    background: var(--page);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 24px 16px 48px;
-  }
-  .wrap { max-width: 1100px; margin: 0 auto; }
-  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
-  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
-  .note { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip {
+  font: 500 13px var(--body); color: var(--muted); background: transparent;
+  border: 1px solid var(--line); padding: 6px 12px; cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  min-height: 32px;
+}
+.chip:hover { color: var(--gold-hi); border-color: var(--gold); }
+.chip[aria-pressed="true"] { color: #1a1408; background: var(--gold); border-color: var(--gold); }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 24px;
-  }
-  @media (max-width: 700px) {
-    .tiles { grid-template-columns: repeat(2, 1fr); }
-  }
-  .tile {
-    background: var(--tile-bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 14px;
-  }
-  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-  .tile .value { font-size: 22px; font-weight: 700; }
-  .tile .value.pos { color: var(--pos); }
-  .tile .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.card {
+  position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--gold); padding: 26px 20px 22px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  box-shadow: 0 0 0 4px var(--bg), 0 0 0 5px var(--line), 0 20px 60px #0009;
+}
+.card::before, .card::after {
+  content: ""; position: absolute; width: 18px; height: 18px; border: 2px solid var(--gold);
+}
+.card::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+.card::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
 
-  .panel {
-    background: var(--tile-bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 16px 8px;
-    margin-bottom: 20px;
-  }
-  .panel h2 { font-size: 14px; font-weight: 700; margin: 0 0 2px; }
-  .panel .panel-sub { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
+.crest { width: min(240px, 62vw); aspect-ratio: 1; }
+.crest svg { width: 100%; height: 100%; display: block; }
+.crest.wide { width: 100%; aspect-ratio: 1215 / 717; }
+.crest.wide img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; border: 1px solid var(--gold); background: var(--panel); }
+.crest.spin svg { animation: flick .12s steps(2) infinite; }
+@keyframes flick { 50% { filter: brightness(1.5) saturate(1.3); } }
+.crest.pop svg, .crest.pop img { animation: pop .5s cubic-bezier(.2,1.4,.4,1); }
+@keyframes pop { from { transform: scale(.7) rotate(-6deg); opacity: .3; } to { transform: none; opacity: 1; } }
 
-  .legend { display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.name { margin: 0; font-size: clamp(30px, 9vw, 44px); font-weight: 700; color: var(--gold-hi); line-height: 1.1; text-wrap: balance; }
+.en { font-family: var(--display); letter-spacing: .2em; font-size: 13px; color: var(--cyan); text-transform: uppercase; margin-top: -6px; }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.tag { font-size: 12px; padding: 3px 10px; border: 1px solid var(--line); color: var(--gold); }
+.tag.region { color: var(--rc, var(--gold)); border-color: var(--rc, var(--line)); }
+.desc { margin: 0; max-width: 34ch; font-size: 15px; line-height: 1.65; color: var(--text); text-wrap: pretty; min-height: 3.3em; }
+.counter { font-size: 12px; color: var(--muted); }
 
-  .scroll-x { overflow-x: auto; padding-bottom: 6px; }
-  .chart-svg-wrap { position: relative; }
+.go {
+  font: 700 17px var(--body); letter-spacing: .08em; color: #1a1408; cursor: pointer;
+  background: linear-gradient(180deg, #e6c98a, var(--gold) 55%, #a88a4e);
+  border: 0; padding: 14px 44px; width: min(100%, 320px); min-height: 52px;
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  transition: filter .15s, transform .1s;
+}
+.go:hover { filter: brightness(1.08); }
+.go:active { transform: scale(.98); }
+.go:disabled { filter: grayscale(.6) brightness(.8); cursor: progress; }
 
-  .tooltip {
-    position: fixed;
-    pointer-events: none;
-    background: var(--text-primary);
-    color: var(--surface-1);
-    font-size: 12px;
-    line-height: 1.5;
-    padding: 8px 10px;
-    border-radius: 6px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
-    opacity: 0;
-    transform: translate(-50%, -100%);
-    transition: opacity 0.08s ease;
-    z-index: 50;
-    white-space: nowrap;
-  }
-  .tooltip.show { opacity: 1; }
-  .tooltip b { font-weight: 700; }
-
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-  thead th {
-    position: sticky; top: 0;
-    background: var(--tile-bg);
-    text-align: right;
-    font-weight: 600;
-    color: var(--text-secondary);
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-  }
-  thead th:first-child, tbody td:first-child { text-align: left; }
-  tbody td {
-    text-align: right;
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--grid);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
-  .table-scroll { max-height: 480px; overflow-y: auto; border-radius: 6px; }
-  .profit-pos { color: var(--pos); }
-  .profit-neg { color: var(--neg); }
-  .foot-star { color: var(--text-muted); }
-
-  footer.notes { margin-top: 4px; }
-  footer.notes ul { margin: 6px 0 0; padding-left: 18px; }
-  footer.notes li { margin-bottom: 3px; }
-
-  /* ---- Firebase 저장 체험 패널 ---- */
-  #firebase-demo-panel { border: 1px dashed var(--series-1); }
-  #firebase-demo-panel h2 { display: flex; align-items: center; gap: 6px; }
-  .memo-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-  .memo-row input {
-    flex: 1; min-width: 200px; padding: 8px 10px;
-    border: 1px solid var(--border); border-radius: 6px;
-    background: var(--surface-1); color: var(--text-primary); font-size: 13px;
-  }
-  .memo-row button {
-    padding: 8px 18px; border: none; border-radius: 6px;
-    background: var(--series-1); color: #fff; cursor: pointer;
-    font-weight: 600; font-size: 13px;
-  }
-  .memo-row button:disabled { opacity: 0.5; cursor: default; }
-  #memo-status { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; min-height: 16px; }
-  #memo-list { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-  #memo-list li {
-    display: flex; justify-content: space-between; gap: 12px;
-    padding: 8px 0; border-bottom: 1px solid var(--grid);
-  }
-  #memo-list li.memo-empty { color: var(--text-muted); justify-content: flex-start; }
-  #memo-list .memo-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.history h2 { margin: 0 0 10px; font-family: var(--display); font-size: 12px; letter-spacing: .25em; color: var(--muted); text-transform: uppercase; font-weight: 600; text-align: center; }
+.hist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.hist li { width: 60px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.hist svg { width: 48px; height: 48px; }
+.empty { color: var(--muted); font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .crest.spin svg, .crest.pop svg, .crest.pop img { animation: none; } }
 </style>
-</head>
-<body>
 
-<div class="viz-root">
-  <div class="wrap">
-    <h1>A2G 네트웍스 대시보드</h1>
-    <p class="subtitle">2026-01-01 ~ 2026-09-13 (2026년 이후 자료) · 「월별판매현황」 시트 기준, 매입일자 / 매도일자(또는 입금일자) 기준 집계</p>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Summoner's Rift</div>
+    <h1>랜덤 챔피언 뽑기</h1>
+    <p class="sub">오늘 플레이할 챔피언을 운에 맡겨 보세요.</p>
+  </header>
 
-    <div class="panel">
-      <h2>월별 지표</h2>
-      <p class="panel-sub">2026년 1월 ~ 9월, 대수(매입/판매) · 매출(판매금액)</p>
-      <div class="legend">
-        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매입 대수</span>
-        <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>판매 대수</span>
-      </div>
-      <div class="scroll-x">
-        <div class="chart-svg-wrap" id="chart-month-count-wrap"></div>
-      </div>
-      <div class="legend" style="margin-top:14px;">
-        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매출(판매금액)</span>
-      </div>
-      <div class="scroll-x">
-        <div class="chart-svg-wrap" id="chart-month-rev-wrap"></div>
-      </div>
-    </div>
+  <div class="filters" id="filters" role="group" aria-label="직업 필터"></div>
 
-    <div class="tiles">
-      <div class="tile">
-        <div class="label">총 매입 대수</div>
-        <div class="value" id="tile-buy">-</div>
-        <div class="sub" id="tile-buy-amt">-</div>
-      </div>
-      <div class="tile">
-        <div class="label">총 판매 대수</div>
-        <div class="value" id="tile-sell">-</div>
-        <div class="sub" id="tile-sell-amt">-</div>
-      </div>
-      <div class="tile">
-        <div class="label">누적 순수익</div>
-        <div class="value pos" id="tile-profit">-</div>
-        <div class="sub" id="tile-margin">-</div>
-      </div>
-      <div class="tile">
-        <div class="label">주당 평균</div>
-        <div class="value" id="tile-avg">-</div>
-        <div class="sub">매입 / 판매 대수</div>
-      </div>
-    </div>
+  <section class="card" aria-live="polite">
+    <div class="crest" id="crest"></div>
+    <h2 class="name" id="name">?</h2>
+    <div class="en" id="en">Champion</div>
+    <div class="tags" id="tags"></div>
+    <p class="desc" id="desc">버튼을 누르면 챔피언이 한 명 정해집니다.</p>
+    <button class="go" id="go" type="button">챔피언 뽑기</button>
+    <div class="counter" id="counter"></div>
+  </section>
 
-    <div class="panel">
-      <h2>주별 매입 · 판매 대수</h2>
-      <p class="panel-sub">대(臺) 단위, 주 시작일(월요일) 기준</p>
-      <div class="legend">
-        <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>매입 대수</span>
-        <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>판매 대수</span>
-      </div>
-      <div class="scroll-x">
-        <div class="chart-svg-wrap" id="chart1-wrap"></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>주별 순수익</h2>
-      <p class="panel-sub">판매금액 − 총 매입원가(부대비용 포함) 기준, 원(₩)</p>
-      <div class="scroll-x">
-        <div class="chart-svg-wrap" id="chart2-wrap"></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>주별 상세 표</h2>
-      <p class="panel-sub">스크롤하여 전체 37주 확인 가능</p>
-      <div class="table-scroll">
-        <table id="data-table">
-          <thead>
-            <tr>
-              <th>주(기간)</th>
-              <th>매입 대수</th>
-              <th>판매 대수</th>
-              <th>순수익(원)</th>
-            </tr>
-          </thead>
-          <tbody id="table-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="panel" id="firebase-demo-panel">
-      <h2>🧪 저장 기능 체험 (Firebase 연동)</h2>
-      <p class="panel-sub">아래에 메모를 입력하고 저장해보세요. 새로고침하거나 다른 기기·브라우저로 접속해도 남아있다면, 브라우저가 아니라 서버(DB)에 저장된 것입니다 — 이게 바로 BE(백엔드)의 역할입니다.</p>
-      <div class="memo-row">
-        <input id="memo-input" type="text" placeholder="예: 9월 3주차 목표 15대" maxlength="200">
-        <button id="memo-save-btn" type="button">저장</button>
-      </div>
-      <div id="memo-status"></div>
-      <ul id="memo-list"><li class="memo-empty">Firebase 설정을 입력하면 여기에 저장된 메모가 표시됩니다.</li></ul>
-    </div>
-
-    <footer class="notes">
-      <p class="note">※ 데이터 산출 기준 및 참고사항</p>
-      <ul class="note">
-        <li>2026년 1월 1일 이후 자료만 포함했습니다 (2025년 매입·매도 건은 제외).</li>
-        <li>매입 대수는 「월별판매현황」 시트의 <b>매입일자</b> 기준, 판매 대수·순수익·매출은 <b>매도일자</b>(없는 경우 입금일자) 기준으로 집계했습니다. 월별 지표는 해당 월의 달력 기준, 주별 지표는 월요일 시작 기준입니다.</li>
-        <li>매출은 판매금액(부대비용 차감 전) 합계이며, 순수익 = 매도금액 − 총 차대금(계약매입금액 + 알선수수료 + 취득세 + 성능비 등 부대경비 합계)입니다.</li>
-        <li>계약 취소/환불 처리된 건은 매입 대수에서 제외했습니다.</li>
-        <li>1건(BMW520d, 397수1388, 2026-02 매도)은 원본 파일의 매도금액 셀이 손상되어("2/2+Y60:AG60") 값을 확인할 수 없어 판매 대수에는 포함하되 순수익·매출 계산에서는 제외했습니다.</li>
-        <li>차량 1대(폴로, 14오0767)는 매입일자가 비어 있어 「26년9월09일」 일일업무현황 시트의 현금출납 내역("9/3 김경록-폴로(14오0767) 차량매입대금")을 참고해 9/3로 보완했습니다.</li>
-        <li>거래내역_28004(이전비)·27304(운영비) 계좌 파일은 2026-09-09 하루치 은행 거래내역으로, 해당 일자 일일업무현황 검증용 자료이며 이번 집계에는 직접 반영하지 않았습니다.</li>
-      </ul>
-    </footer>
-  </div>
+  <section class="history">
+    <h2>최근 뽑은 챔피언</h2>
+    <ul class="hist" id="hist"></ul>
+    <p class="empty" id="histEmpty">아직 뽑은 챔피언이 없습니다.</p>
+  </section>
 </div>
 
-<div class="tooltip" id="tooltip"></div>
-
 <script>
-const DATA = {"weeks":[{"week_start":"2025-12-29","week_end":"2026-01-04","label":"12/29~1/4","buy_count":3,"buy_amt":34411184,"sell_count":0,"sell_revenue":0,"sell_cost":0,"profit":0,"unknown_profit_count":0},{"week_start":"2026-01-05","week_end":"2026-01-11","label":"1/5~1/11","buy_count":8,"buy_amt":222491261,"sell_count":7,"sell_revenue":291914440,"sell_cost":289970390,"profit":1944050,"unknown_profit_count":0},{"week_start":"2026-01-12","week_end":"2026-01-18","label":"1/12~1/18","buy_count":8,"buy_amt":91288234,"sell_count":8,"sell_revenue":92540000,"sell_cost":87695990,"profit":4844010,"unknown_profit_count":0},{"week_start":"2026-01-19","week_end":"2026-01-25","label":"1/19~1/25","buy_count":6,"buy_amt":96615277,"sell_count":3,"sell_revenue":38990000,"sell_cost":35811214,"profit":3178786,"unknown_profit_count":0},{"week_start":"2026-01-26","week_end":"2026-02-01","label":"1/26~2/1","buy_count":17,"buy_amt":210501234,"sell_count":9,"sell_revenue":91340000,"sell_cost":81672175,"profit":9667825,"unknown_profit_count":0},{"week_start":"2026-02-02","week_end":"2026-02-08","label":"2/2~2/8","buy_count":7,"buy_amt":146615350,"sell_count":11,"sell_revenue":93200000,"sell_cost":83147261,"profit":10052739,"unknown_profit_count":1},{"week_start":"2026-02-09","week_end":"2026-02-15","label":"2/9~2/15","buy_count":16,"buy_amt":170025653,"sell_count":10,"sell_revenue":189169900,"sell_cost":180870645,"profit":8299255,"unknown_profit_count":0},{"week_start":"2026-02-16","week_end":"2026-02-22","label":"2/16~2/22","buy_count":4,"buy_amt":37377320,"sell_count":6,"sell_revenue":86400000,"sell_cost":81910580,"profit":4489420,"unknown_profit_count":0},{"week_start":"2026-02-23","week_end":"2026-03-01","label":"2/23~3/1","buy_count":13,"buy_amt":113341341,"sell_count":8,"sell_revenue":71300000,"sell_cost":61911374,"profit":9388626,"unknown_profit_count":0},{"week_start":"2026-03-02","week_end":"2026-03-08","label":"3/2~3/8","buy_count":10,"buy_amt":75840051,"sell_count":8,"sell_revenue":90750000,"sell_cost":82465446,"profit":8284554,"unknown_profit_count":0},{"week_start":"2026-03-09","week_end":"2026-03-15","label":"3/9~3/15","buy_count":16,"buy_amt":307429513,"sell_count":13,"sell_revenue":149490000,"sell_cost":139997080,"profit":9492920,"unknown_profit_count":0},{"week_start":"2026-03-16","week_end":"2026-03-22","label":"3/16~3/22","buy_count":21,"buy_amt":426211785,"sell_count":17,"sell_revenue":512813780,"sell_cost":495580251,"profit":17233529,"unknown_profit_count":0},{"week_start":"2026-03-23","week_end":"2026-03-29","label":"3/23~3/29","buy_count":11,"buy_amt":109896337,"sell_count":11,"sell_revenue":224540000,"sell_cost":224724373,"profit":-184373,"unknown_profit_count":0},{"week_start":"2026-03-30","week_end":"2026-04-05","label":"3/30~4/5","buy_count":12,"buy_amt":97593731,"sell_count":8,"sell_revenue":83900000,"sell_cost":75774500,"profit":8125500,"unknown_profit_count":0},{"week_start":"2026-04-06","week_end":"2026-04-12","label":"4/6~4/12","buy_count":16,"buy_amt":316078087,"sell_count":16,"sell_revenue":158000000,"sell_cost":147632535,"profit":10367465,"unknown_profit_count":0},{"week_start":"2026-04-13","week_end":"2026-04-19","label":"4/13~4/19","buy_count":12,"buy_amt":251616101,"sell_count":15,"sell_revenue":295407380,"sell_cost":282572361,"profit":12835019,"unknown_profit_count":0},{"week_start":"2026-04-20","week_end":"2026-04-26","label":"4/20~4/26","buy_count":9,"buy_amt":80965210,"sell_count":11,"sell_revenue":203642000,"sell_cost":193661364,"profit":9980636,"unknown_profit_count":0},{"week_start":"2026-04-27","week_end":"2026-05-03","label":"4/27~5/3","buy_count":5,"buy_amt":101524730,"sell_count":13,"sell_revenue":235676040,"sell_cost":237470682,"profit":-1794642,"unknown_profit_count":0},{"week_start":"2026-05-04","week_end":"2026-05-10","label":"5/4~5/10","buy_count":5,"buy_amt":64133890,"sell_count":5,"sell_revenue":89100000,"sell_cost":84576150,"profit":4523850,"unknown_profit_count":0},{"week_start":"2026-05-11","week_end":"2026-05-17","label":"5/11~5/17","buy_count":6,"buy_amt":56536310,"sell_count":19,"sell_revenue":238200000,"sell_cost":222484468,"profit":15715532,"unknown_profit_count":0},{"week_start":"2026-05-18","week_end":"2026-05-24","label":"5/18~5/24","buy_count":10,"buy_amt":141369780,"sell_count":15,"sell_revenue":133950000,"sell_cost":132526971,"profit":1423029,"unknown_profit_count":0},{"week_start":"2026-05-25","week_end":"2026-05-31","label":"5/25~5/31","buy_count":9,"buy_amt":54751720,"sell_count":4,"sell_revenue":30100000,"sell_cost":28665820,"profit":1434180,"unknown_profit_count":0},{"week_start":"2026-06-01","week_end":"2026-06-07","label":"6/1~6/7","buy_count":11,"buy_amt":97039270,"sell_count":9,"sell_revenue":82660000,"sell_cost":73710350,"profit":8949650,"unknown_profit_count":0},{"week_start":"2026-06-08","week_end":"2026-06-14","label":"6/8~6/14","buy_count":16,"buy_amt":127708740,"sell_count":8,"sell_revenue":98700000,"sell_cost":88446570,"profit":10253430,"unknown_profit_count":0},{"week_start":"2026-06-15","week_end":"2026-06-21","label":"6/15~6/21","buy_count":7,"buy_amt":40208240,"sell_count":15,"sell_revenue":116700000,"sell_cost":101098020,"profit":15601980,"unknown_profit_count":0},{"week_start":"2026-06-22","week_end":"2026-06-28","label":"6/22~6/28","buy_count":20,"buy_amt":165003930,"sell_count":12,"sell_revenue":123228310,"sell_cost":106704330,"profit":16523980,"unknown_profit_count":0},{"week_start":"2026-06-29","week_end":"2026-07-05","label":"6/29~7/5","buy_count":10,"buy_amt":110182640,"sell_count":7,"sell_revenue":54800000,"sell_cost":47746180,"profit":7053820,"unknown_profit_count":0},{"week_start":"2026-07-06","week_end":"2026-07-12","label":"7/6~7/12","buy_count":4,"buy_amt":44003170,"sell_count":12,"sell_revenue":123600000,"sell_cost":114411340,"profit":9188660,"unknown_profit_count":0},{"week_start":"2026-07-13","week_end":"2026-07-19","label":"7/13~7/19","buy_count":5,"buy_amt":41986210,"sell_count":12,"sell_revenue":103060000,"sell_cost":95012010,"profit":8047990,"unknown_profit_count":0},{"week_start":"2026-07-20","week_end":"2026-07-26","label":"7/20~7/26","buy_count":13,"buy_amt":101472600,"sell_count":12,"sell_revenue":67200000,"sell_cost":61138350,"profit":6061650,"unknown_profit_count":0},{"week_start":"2026-07-27","week_end":"2026-08-02","label":"7/27~8/2","buy_count":5,"buy_amt":47397090,"sell_count":9,"sell_revenue":125700000,"sell_cost":111034240,"profit":14665760,"unknown_profit_count":0},{"week_start":"2026-08-03","week_end":"2026-08-09","label":"8/3~8/9","buy_count":12,"buy_amt":128241900,"sell_count":5,"sell_revenue":39000000,"sell_cost":34983610,"profit":4016390,"unknown_profit_count":0},{"week_start":"2026-08-10","week_end":"2026-08-16","label":"8/10~8/16","buy_count":7,"buy_amt":82930300,"sell_count":4,"sell_revenue":52800000,"sell_cost":51064700,"profit":1735300,"unknown_profit_count":0},{"week_start":"2026-08-17","week_end":"2026-08-23","label":"8/17~8/23","buy_count":5,"buy_amt":70311680,"sell_count":5,"sell_revenue":70400000,"sell_cost":65736880,"profit":4663120,"unknown_profit_count":0},{"week_start":"2026-08-24","week_end":"2026-08-30","label":"8/24~8/30","buy_count":3,"buy_amt":17621250,"sell_count":8,"sell_revenue":121200000,"sell_cost":111274040,"profit":9925960,"unknown_profit_count":0},{"week_start":"2026-08-31","week_end":"2026-09-06","label":"8/31~9/6","buy_count":8,"buy_amt":97159160,"sell_count":7,"sell_revenue":103500000,"sell_cost":98314470,"profit":5185530,"unknown_profit_count":0},{"week_start":"2026-09-07","week_end":"2026-09-13","label":"9/7~9/13","buy_count":4,"buy_amt":36226360,"sell_count":8,"sell_revenue":98600000,"sell_cost":93993340,"profit":4606660,"unknown_profit_count":0}],"months":[{"year":2026,"month":1,"label":"2026.01","buy_count":42,"buy_amt":655307190,"sell_count":27,"sell_revenue":514784440,"sell_cost":495149769,"profit":19634671,"unknown_profit_count":0},{"year":2026,"month":2,"label":"2026.02","buy_count":40,"buy_amt":467359664,"sell_count":35,"sell_revenue":440069900,"sell_cost":407839860,"profit":32230040,"unknown_profit_count":1},{"year":2026,"month":3,"label":"2026.03","buy_count":60,"buy_amt":941393086,"sell_count":52,"sell_revenue":1000593780,"sell_cost":964790620,"profit":35803160,"unknown_profit_count":0},{"year":2026,"month":4,"label":"2026.04","buy_count":52,"buy_amt":825762459,"sell_count":60,"sell_revenue":953625420,"sell_cost":915087972,"profit":38537448,"unknown_profit_count":0},{"year":2026,"month":5,"label":"2026.05","buy_count":30,"buy_amt":316791700,"sell_count":43,"sell_revenue":491350000,"sell_cost":468253409,"profit":23096591,"unknown_profit_count":0},{"year":2026,"month":6,"label":"2026.06","buy_count":58,"buy_amt":452008290,"sell_count":46,"sell_revenue":433188310,"sell_cost":379714430,"profit":53473880,"unknown_profit_count":0},{"year":2026,"month":7,"label":"2026.07","buy_count":33,"buy_amt":322993600,"sell_count":50,"sell_revenue":462460000,"sell_cost":419586960,"profit":42873040,"unknown_profit_count":0},{"year":2026,"month":8,"label":"2026.08","buy_count":27,"buy_amt":299105130,"sell_count":22,"sell_revenue":283400000,"sell_cost":263059230,"profit":20340770,"unknown_profit_count":0},{"year":2026,"month":9,"label":"2026.09","buy_count":12,"buy_amt":133385520,"sell_count":15,"sell_revenue":202100000,"sell_cost":192307810,"profit":9792190,"unknown_profit_count":0}],"totals":{"weeks":37,"buy_count":354,"buy_amt":4414106639,"sell_count":350,"sell_revenue":4781571850,"sell_cost":4505790060,"profit":275781790,"unknown_profit_count":1},"cancelled":7}
-;
+const RAW = `Aatrox|아트록스|전사|슈리마|다르킨의 검에 깃든 고대 전사입니다. 거대한 검을 휘두르며 적을 베어 체력을 회복합니다.
+Ahri|아리|마법사|이오니아|구미호의 힘을 지닌 바스타야입니다. 매혹과 구슬 마법으로 적을 홀리고 빠르게 빠져나갑니다.
+Akali|아칼리|암살자|이오니아|연막 속에서 튀어나와 적을 처단하는 닌자입니다.
+Akshan|아크샨|원거리 딜러|슈리마|갈고리와 소총을 쓰는 방랑자입니다. 은신한 채 움직이며 쓰러진 아군의 복수를 합니다.
+Alistar|알리스타|서포터|녹서스|노예 신분에서 벗어난 미노타우르스입니다. 들이받고 박치기로 군중 제어를 겁니다.
+Ambessa|암베사|전사|녹서스|건틀릿과 날랜 몸놀림으로 적진을 파고드는 녹서스의 전쟁 지도자입니다.
+Amumu|아무무|탱커|슈리마|외로운 미라 소년입니다. 붕대로 적을 묶고 눈물로 주변을 흔들어 놓습니다.
+Anivia|애니비아|마법사|프렐요드|얼음 불사조입니다. 벽과 눈보라로 전장을 지배하고 알에서 다시 부활합니다.
+Annie|애니|마법사|녹서스|불꽃을 다루는 어린 마법사입니다. 곰 인형 티버를 소환해 적을 기절시킵니다.
+Aphelios|아펠리오스|원거리 딜러|타곤|달의 무기 다섯 자루를 번갈아 쓰는 암살자입니다. 무기 조합에 따라 전혀 다른 전투를 합니다.
+Ashe|애쉬|원거리 딜러|프렐요드|아바로사 부족의 여왕입니다. 서리 화살로 적을 둔화시키고 먼 곳에서 궁극기를 쏩니다.
+Aurelion Sol|아우렐리온 솔|마법사|타곤|별을 만든 용입니다. 별가루와 천체 마법으로 우주를 조각합니다.
+Aurora|오로라|마법사|프렐요드|정령계를 오가는 토끼 모습의 마법사입니다. 짧은 이동과 정령 폭발이 특기입니다.
+Azir|아지르|마법사|슈리마|슈리마의 황제입니다. 모래 병사를 부려 전장을 지휘합니다.
+Bard|바드|서포터|룬테라|별 너머에서 온 방랑자입니다. 차임을 모으며 아군을 돕고 적을 가둡니다.
+Bel'Veth|벨베스|전사|공허|공허의 여제입니다. 끝없이 성장하며 전장을 잠식합니다.
+Blitzcrank|블리츠크랭크|탱커|자운|증기로 움직이는 골렘입니다. 로켓 주먹으로 끌어당긴 적을 내려칩니다.
+Brand|브랜드|마법사|룬테라|화염에 휩싸인 복수자입니다. 불을 번지게 하고 연쇄 폭발을 일으킵니다.
+Braum|브라움|서포터|프렐요드|방패를 든 프렐요드의 영웅입니다. 아군을 막아 주며 적을 얼려 움직임을 묶습니다.
+Briar|브라이어|전사|녹서스|피의 갈증에 휘둘리는 소녀입니다. 맹렬하게 달려들어 적의 체력을 빨아들입니다.
+Caitlyn|케이틀린|원거리 딜러|필트오버|필트오버의 보안관입니다. 긴 사거리와 덫으로 적을 몰아냅니다.
+Camille|카밀|전사|필트오버|정밀한 강철의 집행자입니다. 갈고리로 날아가 적을 압박하며 가두어 버립니다.
+Cassiopeia|카시오페아|마법사|녹서스|뱀의 몸을 한 독의 마법사입니다. 독 중첩과 석화 시선이 특징입니다.
+Cho'Gath|초가스|탱커|공허|공허의 괴물입니다. 적을 먹어치울수록 크게 자랍니다.
+Corki|코르키|원거리 딜러|요들|공중을 누비는 요들입니다. 폭탄과 총격으로 마법·물리 피해를 섞어 줍니다.
+Darius|다리우스|전사|녹서스|녹서스의 손입니다. 도끼로 출혈을 쌓고 처형으로 마무리합니다.
+Diana|다이애나|암살자|타곤|달빛의 검을 든 전사입니다. 달 마법으로 접근해 폭발을 일으킵니다.
+Dr. Mundo|문도 박사|탱커|자운|미치광이 약물 박사입니다. 식칼을 던지며 강인한 몸으로 버팁니다.
+Draven|드레이븐|원거리 딜러|녹서스|화려한 처형자입니다. 도끼를 받아내는 곡예로 피해를 줍니다.
+Ekko|에코|암살자|자운|시간을 되감는 소년 발명가입니다. 잔상으로 위치를 되돌려 피해를 입힙니다.
+Elise|엘리스|마법사|그림자 군도|거미 여왕입니다. 인간과 거미 형태를 오가며 적을 거미줄로 낚아챕니다.
+Evelynn|이블린|암살자|룬테라|은신하는 악마입니다. 매혹으로 적을 현혹한 뒤 순식간에 처치합니다.
+Ezreal|이즈리얼|원거리 딜러|필트오버|모험가 탐험가입니다. 신비한 화살과 순간이동으로 안전하게 싸웁니다.
+Fiddlesticks|피들스틱|마법사|룬테라|허수아비 모양의 공포입니다. 겁에 질린 적에게 광역 공포를 퍼뜨립니다.
+Fiora|피오라|전사|데마시아|결투의 대가입니다. 적의 약점을 찔러 일대일에서 압도합니다.
+Fizz|피즈|암살자|빌지워터|바다에서 온 장난꾸러기입니다. 삼지창으로 뛰어올라 피해를 주고 빠집니다.
+Galio|갈리오|탱커|데마시아|마법사를 지키는 수호 석상입니다. 마법을 막아내고 아군 곁으로 날아갑니다.
+Gangplank|갱플랭크|전사|빌지워터|바다의 폭군입니다. 폭탄 통을 터뜨리고 오렌지로 상태 이상을 풉니다.
+Garen|가렌|전사|데마시아|데마시아의 힘입니다. 회전 베기와 침묵으로 정면 돌파합니다.
+Gnar|나르|전사|프렐요드|분노를 쌓으면 거대해지는 야생 개체입니다. 작을 땐 빠르고 클 때는 강력합니다.
+Gragas|그라가스|전사|프렐요드|술통을 든 거구입니다. 술을 던지고 몸통 박치기로 난장판을 만듭니다.
+Graves|그레이브즈|원거리 딜러|빌지워터|산탄총을 든 무법자입니다. 단단한 몸으로 근접에서 폭딜을 넣습니다.
+Gwen|그웬|전사|그림자 군도|살아 움직이는 인형입니다. 거대한 가위로 베고 안개로 몸을 가립니다.
+Hecarim|헤카림|전사|그림자 군도|유령 기마병입니다. 질주하며 적을 쓰러뜨리고 공포를 퍼뜨립니다.
+Heimerdinger|하이머딩거|마법사|필트오버|천재 발명가입니다. 포탑과 장치로 영역을 방어합니다.
+Hwei|훼이|마법사|이오니아|그림으로 마법을 그리는 화가입니다. 세 가지 감정을 담은 기술 조합을 씁니다.
+Illaoi|일라오이|전사|빌지워터|촉수를 부리는 사제입니다. 거대한 촉수로 싸우며 적의 정신을 흔듭니다.
+Irelia|이렐리아|전사|이오니아|춤추는 칼날의 주인입니다. 칼날을 날려 이동하고 적을 휘감습니다.
+Ivern|아이번|서포터|이오니아|숲의 친구입니다. 풀로 길을 만들고 데이지를 소환해 아군을 돕습니다.
+Janna|잔나|서포터|자운|바람의 정령입니다. 아군을 보호하고 적을 날려 보냅니다.
+Jarvan IV|자르반 4세|전사|데마시아|데마시아의 왕자입니다. 창과 깃발로 돌진해 전장을 지휘합니다.
+Jax|잭스|전사|룬테라|무기의 달인입니다. 램프 기둥을 들고 뛰어들어 반격합니다.
+Jayce|제이스|전사|필트오버|해머와 대포를 오가는 발명가입니다. 거리에 맞춰 형태를 바꿔 싸웁니다.
+Jhin|진|원거리 딜러|이오니아|죽음을 예술로 만드는 암살자입니다. 네 번째 총알이 강하게 터집니다.
+Jinx|징크스|원거리 딜러|자운|혼돈의 총잡이입니다. 로켓과 기관총을 번갈아 쓰며 폭발적으로 성장합니다.
+K'Sante|크산테|탱커|슈리마|자존심 강한 전사입니다. 탱커와 전사 모드를 오가며 싸웁니다.
+Kai'Sa|카이사|원거리 딜러|공허|공허에 맞서는 생존자입니다. 공허의 갑옷으로 진화하며 적에게 달려듭니다.
+Kalista|칼리스타|원거리 딜러|그림자 군도|복수의 창입니다. 창을 던져 박아 넣은 뒤 잡아당겨 피해를 줍니다.
+Karma|카르마|마법사|이오니아|이오니아의 영적 지도자입니다. 기운으로 아군을 지키고 적을 묶습니다.
+Karthus|카서스|마법사|그림자 군도|죽음의 노래꾼입니다. 죽은 뒤에도 마법을 이어 가고 궁극기로 맵 전체를 때립니다.
+Kassadin|카사딘|암살자|공허|공허를 걷는 자입니다. 순간이동 같은 이동과 마법 저항으로 암살합니다.
+Katarina|카타리나|암살자|녹서스|단검의 달인입니다. 순간이동으로 접근해 회전 베기로 몰살합니다.
+Kayle|케일|전사|타곤|정의의 천사입니다. 성장할수록 날개와 불꽃 검으로 강해집니다.
+Kayn|케인|전사|이오니아|그림자 낫의 주인입니다. 암살자와 괴수 형태 중 선택해 싸웁니다.
+Kennen|케넨|마법사|이오니아|번개의 요들입니다. 순간적으로 달려들어 전기 폭풍을 터뜨립니다.
+Kha'Zix|카직스|암살자|공허|진화하는 공허 포식자입니다. 고립된 적을 사냥하고 능력을 진화시킵니다.
+Kindred|킨드레드|원거리 딜러|룬테라|죽음의 양과 늑대입니다. 표식을 사냥하며 쌓은 보상으로 강해집니다.
+Kled|클레드|전사|녹서스|투지 넘치는 기사입니다. 겁쟁이 스커를 타고 돌진하며 전장을 흔듭니다.
+Kog'Maw|코그모|원거리 딜러|공허|산성 침을 뱉는 괴물입니다. 죽은 뒤에도 계속 쏘아 댑니다.
+LeBlanc|르블랑|마법사|녹서스|분신과 환영의 마법사입니다. 순식간에 폭딜을 넣고 사라집니다.
+Lee Sin|리 신|전사|이오니아|눈먼 수도승입니다. 연속기와 발차기로 정글을 누빕니다.
+Leona|레오나|탱커|타곤|태양의 수호자입니다. 방패로 내리치고 기절시켜 아군을 이끕니다.
+Lillia|릴리아|마법사|이오니아|꿈을 모으는 사슴 요정입니다. 돌아다니며 잠을 퍼뜨리고 적을 재웁니다.
+Lissandra|리산드라|마법사|프렐요드|얼음 마녀입니다. 적을 얼려 가두고 자신도 얼음 속에 숨습니다.
+Locke|로크|암살자|데마시아|재의 퇴마사입니다. 2026년 6월에 추가된 최신 챔피언으로, 미드 라인에서 활약하는 암살자입니다.
+Lucian|루시안|원거리 딜러|데마시아|빛의 성전사입니다. 쌍권총과 대시로 빠르게 연타합니다.
+Lulu|룰루|서포터|요들|마법을 부리는 요들입니다. 변이와 보호로 아군을 키우고 적을 양으로 바꿉니다.
+Lux|럭스|마법사|데마시아|빛의 마법사입니다. 족쇄와 레이저로 멀리서 큰 피해를 줍니다.
+Malphite|말파이트|탱커|이쉬탈|돌덩이 거인입니다. 단단한 몸으로 돌진해 단체 기절을 만듭니다.
+Malzahar|말자하르|마법사|공허|공허의 예언자입니다. 소환과 지속 피해로 적을 말려 죽입니다.
+Maokai|마오카이|탱커|그림자 군도|분노한 나무 정령입니다. 묘목을 던지고 마법 공격을 막아냅니다.
+Master Yi|마스터 이|암살자|이오니아|명상 검객입니다. 빠른 공격과 연속 처치로 전장을 휘젓습니다.
+Mel|멜|마법사|필트오버|필트오버의 의회 의원입니다. 마법 반사와 폭발로 적을 압박합니다.
+Milio|밀리오|서포터|이쉬탈|불꽃을 다루는 소년입니다. 따뜻한 불꽃으로 아군을 치유하고 방어합니다.
+Miss Fortune|미스 포츈|원거리 딜러|빌지워터|빌지워터의 현상금 사냥꾼입니다. 총알 비로 광역 피해를 줍니다.
+Mordekaiser|모데카이저|전사|녹서스|철의 망령입니다. 곤봉과 죽음의 영역으로 적을 가둡니다.
+Morgana|모르가나|마법사|데마시아|타락한 천사입니다. 사슬과 방어막으로 적을 가두고 마법을 막아냅니다.
+Naafiri|나피리|암살자|슈리마|다르킨 사냥개입니다. 분신 개들과 함께 몰려들어 적을 찢습니다.
+Nami|나미|서포터|룬테라|바다의 인어입니다. 물 거품과 치유로 아군을 강화합니다.
+Nasus|나서스|탱커|슈리마|모래의 현자입니다. 지팡이로 적을 쳐서 점점 강해집니다.
+Nautilus|노틸러스|탱커|빌지워터|심해의 거인입니다. 닻을 던져 붙잡고 군중 제어로 압박합니다.
+Neeko|니코|마법사|이쉬탈|카멜레온 마법사입니다. 다른 챔피언으로 변신해 적을 속입니다.
+Nidalee|니달리|암살자|이쉬탈|야생의 사냥꾼입니다. 창으로 적을 맞히고 표범으로 변신해 달려듭니다.
+Nilah|닐라|원거리 딜러|빌지워터|기쁨의 전사입니다. 채찍 같은 검으로 적을 휘감고 아군과 함께 싸웁니다.
+Nocturne|녹턴|암살자|룬테라|악몽의 화신입니다. 어둠으로 시야를 가리고 적에게 뛰어듭니다.
+Nunu & Willump|누누와 윌럼프|탱커|프렐요드|눈사람과 소년입니다. 눈덩이를 굴려 적을 밀어내고 얼음 폭풍을 일으킵니다.
+Olaf|올라프|전사|프렐요드|광전사입니다. 죽음을 두려워하지 않고 도끼를 휘두르며 몸으로 부딪힙니다.
+Orianna|오리아나|마법사|필트오버|태엽 소녀입니다. 공을 움직여 원하는 곳에 피해와 보호막을 줍니다.
+Ornn|오른|탱커|프렐요드|불의 대장장이 신입니다. 벽을 세우고 도끼 던지기로 전장을 지배합니다.
+Pantheon|판테온|전사|타곤|전쟁의 화신입니다. 방패와 창으로 압박하며 하늘에서 내리찍습니다.
+Poppy|뽀삐|탱커|데마시아|작은 망치 기사입니다. 벽에 밀어붙여 기절시킵니다.
+Pyke|파이크|서포터|빌지워터|피의 항구의 유령입니다. 갈고리로 끌어당기고 처형으로 골드를 나눕니다.
+Qiyana|키아나|암살자|이쉬탈|원소의 여왕입니다. 지형에 따라 달라지는 원소로 적을 처단합니다.
+Quinn|퀸|원거리 딜러|데마시아|독수리 발로와 함께하는 정찰병입니다. 하늘과 땅을 오가며 싸웁니다.
+Rakan|라칸|서포터|이오니아|매혹적인 서커스 곡예사입니다. 돌진하며 아군에게 보호막과 이동 속도를 줍니다.
+Rammus|람머스|탱커|슈리마|아르마딜로 모양 탱커입니다. 굴러서 돌진하고 도발합니다.
+Rek'Sai|렉사이|전사|공허|땅을 파는 공허 여왕입니다. 지하로 이동해 적을 습격합니다.
+Rell|렐|탱커|녹서스|철 마녀입니다. 말과 창으로 끌어당기고 갑옷을 바꾸며 싸웁니다.
+Renata Glasc|레나타 글라스크|서포터|자운|화학 남작입니다. 아군을 보호하고 적을 광폭하게 만듭니다.
+Renekton|레넥톤|전사|슈리마|분노하는 악어 전사입니다. 분노를 모아 강력한 광역 공격을 냅니다.
+Rengar|렝가|암살자|이쉬탈|사냥꾼입니다. 수풀에서 뛰어올라 사냥감의 약점을 찌릅니다.
+Riven|리븐|전사|녹서스|부러진 검의 전사입니다. 연속 베기와 방어막으로 전투를 이어 갑니다.
+Rumble|럼블|마법사|요들|로봇 전사입니다. 불꽃과 미사일로 열기를 올려 폭발적인 피해를 줍니다.
+Ryze|라이즈|마법사|룬테라|룬 마법사입니다. 룬을 조합해 강한 광역 마법을 퍼붓습니다.
+Samira|사미라|원거리 딜러|슈리마|스타일리시 검객입니다. 총과 검으로 콤보를 이어 가며 화려하게 싸웁니다.
+Sejuani|세주아니|탱커|프렐요드|겨울의 분노입니다. 멧돼지를 타고 돌진해 적을 얼립니다.
+Senna|세나|서포터|그림자 군도|빛과 어둠의 사수입니다. 긴 사거리로 아군을 치유하며 성장합니다.
+Seraphine|세라핀|서포터|필트오버|음악 아이돌입니다. 노래로 아군을 보호하고 광역 매혹을 겁니다.
+Sett|세트|전사|이오니아|투기장의 보스입니다. 주먹다짐으로 피해를 모았다가 폭발시킵니다.
+Shaco|샤코|암살자|룬테라|광대 암살자입니다. 분신과 상자로 적을 놀라게 합니다.
+Shen|쉔|탱커|이오니아|균형의 눈입니다. 도발과 보호로 아군을 먼 거리에서 지켜 줍니다.
+Shyvana|쉬바나|전사|데마시아|반인 반룡입니다. 불꽃과 용 형태로 싸웁니다.
+Singed|신지드|탱커|자운|독 연구자입니다. 가스 구름을 흘리며 적을 쫓다가 밀어 버립니다.
+Sion|사이온|탱커|녹서스|되살아난 전사입니다. 죽은 뒤에도 달려들고 폭발적인 돌진을 합니다.
+Sivir|시비르|원거리 딜러|슈리마|전장의 여왕입니다. 부메랑 검과 방어막으로 용병처럼 싸웁니다.
+Skarner|스카너|탱커|이쉬탈|수정 전갈입니다. 꼬리 가시로 붙잡아 끌고 갑니다.
+Smolder|스몰더|원거리 딜러|카마보르|어린 용입니다. 불꽃을 쌓아 폭발시키며 성장합니다.
+Sona|소나|서포터|데마시아|음악의 대가입니다. 화음으로 아군을 치유하고 적을 흔듭니다.
+Soraka|소라카|서포터|타곤|별의 아이입니다. 치유로 아군을 살리고 적을 침묵시킵니다.
+Swain|스웨인|마법사|녹서스|녹서스의 지도자입니다. 까마귀와 함께 영혼을 빨아들입니다.
+Sylas|사일러스|마법사|데마시아|사슬을 휘두르는 혁명가입니다. 적의 궁극기를 빼앗아 사용합니다.
+Syndra|신드라|마법사|이오니아|어둠의 구체를 던지는 마법사입니다. 구체를 모아 폭발적인 피해를 줍니다.
+Tahm Kench|탐 켄치|서포터|빌지워터|강의 왕입니다. 아군을 삼켜 구출하고 적을 혀로 휘감습니다.
+Taliyah|탈리야|마법사|슈리마|모래 직조사입니다. 지형을 바꾸고 암석으로 벽을 세웁니다.
+Talon|탈론|암살자|녹서스|칼날의 그림자입니다. 벽을 넘나들며 순식간에 적을 베어 냅니다.
+Taric|타릭|서포터|타곤|보석의 수호자입니다. 보석 광채로 아군을 치유하고 무적을 부여합니다.
+Teemo|티모|원거리 딜러|요들|빠른 정찰병입니다. 독 버섯과 독 화살로 적을 괴롭힙니다.
+Thresh|쓰레쉬|서포터|그림자 군도|교수대의 간수입니다. 낫과 랜턴으로 아군을 구하고 적을 끌어옵니다.
+Tristana|트리스타나|원거리 딜러|요들|대포의 요들입니다. 점프와 폭발로 적진에 파고듭니다.
+Trundle|트런들|전사|프렐요드|얼음 왕입니다. 몽둥이로 적을 치며 강력함을 빼앗습니다.
+Tryndamere|트린다미어|전사|프렐요드|바바리안 왕입니다. 분노를 쌓아 치명타를 날리고 죽음을 피합니다.
+Twisted Fate|트위스티드 페이트|마법사|빌지워터|카드의 달인입니다. 카드로 기절과 광역 순간이동을 활용합니다.
+Twitch|트위치|원거리 딜러|자운|하수구 쥐입니다. 은신 후 독 화살과 폭탄으로 습격합니다.
+Udyr|우디르|전사|프렐요드|영혼의 수호자입니다. 동물의 정령 자세로 전투 방식을 바꿉니다.
+Urgot|우르곳|전사|자운|처형자입니다. 사슬과 총을 휘두르며 적을 공포로 몰아넣습니다.
+Varus|바루스|원거리 딜러|이오니아|타락한 화살입니다. 독과 사슬로 적을 압박합니다.
+Vayne|베인|원거리 딜러|데마시아|밤의 사냥꾼입니다. 구르기와 은빛 화살로 적을 처치합니다.
+Veigar|베이가|마법사|요들|작은 흑마법사입니다. 주문력을 쌓아 갈수록 위협적이 됩니다.
+Vel'Koz|벨코즈|마법사|공허|눈동자 모양의 공허입니다. 레이저와 연구로 적을 분해합니다.
+Vex|벡스|마법사|그림자 군도|우울한 요들입니다. 그림자와 공포로 적을 위협합니다.
+Vi|바이|전사|필트오버|건틀릿의 단속관입니다. 돌진하고 주먹으로 적을 밀어붙입니다.
+Viego|비에고|암살자|그림자 군도|몰락한 왕입니다. 쓰러진 적의 몸을 빼앗아 힘을 얻습니다.
+Viktor|빅토르|마법사|자운|기계 진화론자입니다. 마법 장치로 레이저와 광선을 쏩니다.
+Vladimir|블라디미르|마법사|녹서스|혈마법사입니다. 체력을 소모해 강해지며 적의 피를 빨아냅니다.
+Volibear|볼리베어|전사|프렐요드|폭풍의 곰입니다. 번개를 몰고 돌진해 짓밟습니다.
+Warwick|워윅|전사|자운|늑대 인간입니다. 피 냄새를 따라 달려가 적을 사냥합니다.
+Wukong|오공|전사|이오니아|원숭이 왕입니다. 분신과 막대기로 적을 놀라게 합니다.
+Xayah|자야|원거리 딜러|이오니아|깃털을 던지는 반역자입니다. 깃털로 적을 가두고 보호막을 만듭니다.
+Xerath|제라스|마법사|슈리마|승천한 마법사입니다. 긴 사거리의 에너지 포격으로 적을 위협합니다.
+Xin Zhao|신 짜오|전사|데마시아|충직한 창기병입니다. 연속 공격과 돌진으로 적을 띄웁니다.
+Yasuo|야스오|전사|이오니아|바람 검객입니다. 바람 장막과 돌진으로 연속해서 베어 냅니다.
+Yone|요네|전사|이오니아|영혼 검사입니다. 영혼을 베고 두 몸을 오가며 싸웁니다.
+Yorick|요릭|전사|그림자 군도|묘지기입니다. 망령과 거대한 삽으로 적을 밀어냅니다.
+Yunara|유나라|원거리 딜러|이오니아|이오니아의 영적인 힘을 다루는 원거리 챔피언입니다.
+Yuumi|유미|서포터|요들|마법 고양이입니다. 아군에게 붙어 치유와 보호를 제공합니다.
+Zaahen|자헨|전사|슈리마|다르킨의 힘을 지닌 근접 전사입니다.
+Zac|자크|탱커|자운|슬라임 괴물입니다. 몸을 늘려 적을 끌어당기고 튀어 오릅니다.
+Zed|제드|암살자|이오니아|그림자의 대가입니다. 그림자 분신으로 적을 베고 표식으로 처치합니다.
+Zeri|제리|원거리 딜러|자운|전기 소녀입니다. 빠르게 달리며 충전된 번개 사격을 합니다.
+Ziggs|직스|마법사|요들|폭탄 요들입니다. 거대한 폭탄과 폭발 지형으로 포탑을 부숩니다.
+Zilean|질리언|서포터|룬테라|시간의 마법사입니다. 폭탄으로 적을 느리게 하고 아군에 가속과 부활을 줍니다.
+Zoe|조이|마법사|타곤|별의 장난꾸러기입니다. 별똥별과 수면 거품으로 놀라게 합니다.
+Zyra|자이라|마법사|이쉬탈|가시 덩굴 마녀입니다. 식물 소환으로 영역을 장악합니다.`;
 
-const weeks = DATA.weeks;
-const months = DATA.months;
-const totals = DATA.totals;
+const CHAMPS = RAW.trim().split("\n").map(l => {
+  const [en, ko, cls, region, desc] = l.split("|");
+  return { en, ko, cls, region, desc };
+});
 
-function fmtWon(n) {
-  return (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('ko-KR') + '원';
-}
-function fmtNum(n) { return n.toLocaleString('ko-KR'); }
-
-// ---- Stat tiles ----
-document.getElementById('tile-buy').textContent = fmtNum(totals.buy_count) + '대';
-document.getElementById('tile-buy-amt').textContent = '매입금액 ' + fmtWon(totals.buy_amt);
-document.getElementById('tile-sell').textContent = fmtNum(totals.sell_count) + '대';
-document.getElementById('tile-sell-amt').textContent = '판매금액 ' + fmtWon(totals.sell_revenue);
-document.getElementById('tile-profit').textContent = fmtWon(totals.profit);
-const margin = (totals.profit / totals.sell_revenue * 100).toFixed(1);
-document.getElementById('tile-margin').textContent = '판매금액 대비 ' + margin + '%';
-document.getElementById('tile-avg').textContent =
-  (totals.buy_count / totals.weeks).toFixed(1) + ' / ' + (totals.sell_count / totals.weeks).toFixed(1);
-
-// ---- Tooltip helper ----
-const tooltipEl = document.getElementById('tooltip');
-function showTooltip(x, y, html) {
-  tooltipEl.innerHTML = html;
-  tooltipEl.style.left = x + 'px';
-  tooltipEl.style.top = (y - 10) + 'px';
-  tooltipEl.classList.add('show');
-}
-function hideTooltip() { tooltipEl.classList.remove('show'); }
-
-// ---- Nice scale helper ----
-function niceMax(v) {
-  if (v <= 0) return 1;
-  const mag = Math.pow(10, Math.floor(Math.log10(v)));
-  const norm = v / mag;
-  let step;
-  if (norm <= 1) step = 1;
-  else if (norm <= 2) step = 2;
-  else if (norm <= 5) step = 5;
-  else step = 10;
-  return step * mag;
-}
-
-const svgNS = 'http://www.w3.org/2000/svg';
-function el(tag, attrs) {
-  const e = document.createElementNS(svgNS, tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  return e;
-}
-
-// ================= Monthly chart A: grouped bar (buy vs sell count) =================
-(function () {
-  const groupW = 76;
-  const barW = 26;
-  const gap = 4;
-  const leftPad = 40, rightPad = 12, topPad = 12, bottomPad = 24;
-  const chartH = 180;
-  const width = months.length * groupW + leftPad + rightPad;
-  const height = chartH + topPad + bottomPad;
-
-  const maxCount = niceMax(Math.max(...months.map(m => Math.max(m.buy_count, m.sell_count))));
-  const yScale = v => chartH - (v / maxCount) * chartH;
-
-  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
-
-  const ticks = 4;
-  for (let i = 0; i <= ticks; i++) {
-    const v = Math.round(maxCount * i / ticks);
-    const y = topPad + yScale(v);
-    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
-    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
-    t.textContent = v;
-    svg.appendChild(t);
-  }
-  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
-
-  months.forEach((mo, i) => {
-    const gx = leftPad + i * groupW;
-    const bBuy = el('rect', {
-      x: gx + (groupW - (barW * 2 + gap)) / 2,
-      y: topPad + yScale(mo.buy_count),
-      width: barW,
-      height: chartH - yScale(mo.buy_count),
-      rx: 3, fill: 'var(--series-1)'
-    });
-    const bSell = el('rect', {
-      x: gx + (groupW - (barW * 2 + gap)) / 2 + barW + gap,
-      y: topPad + yScale(mo.sell_count),
-      width: barW,
-      height: chartH - yScale(mo.sell_count),
-      rx: 3, fill: 'var(--series-2)'
-    });
-    [bBuy, bSell].forEach(b => {
-      b.style.cursor = 'pointer';
-      b.addEventListener('mousemove', (ev) => {
-        showTooltip(ev.clientX, ev.clientY, `<b>${mo.label}</b><br>매입 ${mo.buy_count}대 · 판매 ${mo.sell_count}대`);
-      });
-      b.addEventListener('mouseleave', hideTooltip);
-    });
-    svg.appendChild(bBuy);
-    svg.appendChild(bSell);
-
-    const t = el('text', { x: gx + groupW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-muted)' });
-    t.textContent = mo.label.slice(5) + '월';
-    svg.appendChild(t);
-  });
-
-  document.getElementById('chart-month-count-wrap').appendChild(svg);
-})();
-
-// ================= Monthly chart B: revenue bar =================
-(function () {
-  const groupW = 76;
-  const barW = 40;
-  const leftPad = 64, rightPad = 12, topPad = 12, bottomPad = 24;
-  const chartH = 160;
-  const width = months.length * groupW + leftPad + rightPad;
-  const height = chartH + topPad + bottomPad;
-
-  const maxRev = niceMax(Math.max(...months.map(m => m.sell_revenue)));
-  const yScale = v => chartH - (v / maxRev) * chartH;
-
-  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
-
-  const ticks = 4;
-  for (let i = 0; i <= ticks; i++) {
-    const v = Math.round(maxRev * i / ticks);
-    const y = topPad + yScale(v);
-    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
-    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
-    t.textContent = (v / 100000000).toFixed(1) + '억';
-    svg.appendChild(t);
-  }
-  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
-
-  months.forEach((mo, i) => {
-    const gx = leftPad + i * groupW + (groupW - barW) / 2;
-    const rect = el('rect', {
-      x: gx, y: topPad + yScale(mo.sell_revenue), width: barW,
-      height: chartH - yScale(mo.sell_revenue),
-      rx: 3, fill: 'var(--series-1)'
-    });
-    rect.style.cursor = 'pointer';
-    rect.addEventListener('mousemove', (ev) => {
-      showTooltip(ev.clientX, ev.clientY, `<b>${mo.label}</b><br>매출 ${fmtWon(mo.sell_revenue)}`);
-    });
-    rect.addEventListener('mouseleave', hideTooltip);
-    svg.appendChild(rect);
-
-    const t = el('text', { x: gx + barW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-muted)' });
-    t.textContent = mo.label.slice(5) + '월';
-    svg.appendChild(t);
-  });
-
-  document.getElementById('chart-month-rev-wrap').appendChild(svg);
-})();
-
-// ================= Chart 1: grouped bar (buy vs sell count) =================
-(function () {
-  const groupW = 34;
-  const barW = 12;
-  const gap = 2;
-  const leftPad = 40, rightPad = 12, topPad = 12, bottomPad = 28;
-  const chartH = 200;
-  const width = weeks.length * groupW + leftPad + rightPad;
-  const height = chartH + topPad + bottomPad;
-
-  const maxCount = niceMax(Math.max(...weeks.map(w => Math.max(w.buy_count, w.sell_count))));
-  const yScale = v => chartH - (v / maxCount) * chartH;
-
-  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
-
-  // gridlines + y ticks
-  const ticks = 4;
-  for (let i = 0; i <= ticks; i++) {
-    const v = Math.round(maxCount * i / ticks);
-    const y = topPad + yScale(v);
-    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
-    const t = el('text', { x: leftPad - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--text-muted)' });
-    t.textContent = v;
-    svg.appendChild(t);
-  }
-  // baseline
-  svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: topPad + chartH, y2: topPad + chartH, stroke: 'var(--baseline)', 'stroke-width': 1 }));
-
-  weeks.forEach((w, i) => {
-    const gx = leftPad + i * groupW;
-    const bBuy = el('rect', {
-      x: gx + (groupW - (barW * 2 + gap)) / 2,
-      y: topPad + yScale(w.buy_count),
-      width: barW,
-      height: chartH - yScale(w.buy_count),
-      rx: 3, fill: 'var(--series-1)', class: 'bar'
-    });
-    const bSell = el('rect', {
-      x: gx + (groupW - (barW * 2 + gap)) / 2 + barW + gap,
-      y: topPad + yScale(w.sell_count),
-      width: barW,
-      height: chartH - yScale(w.sell_count),
-      rx: 3, fill: 'var(--series-2)', class: 'bar'
-    });
-    [bBuy, bSell].forEach(b => {
-      b.style.cursor = 'pointer';
-      b.addEventListener('mousemove', (ev) => {
-        showTooltip(ev.clientX, ev.clientY, `<b>${w.label}</b><br>매입 ${w.buy_count}대 · 판매 ${w.sell_count}대`);
-      });
-      b.addEventListener('mouseleave', hideTooltip);
-    });
-    svg.appendChild(bBuy);
-    svg.appendChild(bSell);
-
-    // x label every ~4 weeks to avoid crowding
-    if (i % 4 === 0 || i === weeks.length - 1) {
-      const t = el('text', { x: gx + groupW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 9, fill: 'var(--text-muted)' });
-      t.textContent = w.label;
-      svg.appendChild(t);
-    }
-  });
-
-  document.getElementById('chart1-wrap').appendChild(svg);
-})();
-
-// ================= Chart 2: diverging bar (profit) =================
-(function () {
-  const groupW = 34;
-  const barW = 16;
-  const leftPad = 56, rightPad = 12, topPad = 12, bottomPad = 28;
-  const chartH = 220;
-  const width = weeks.length * groupW + leftPad + rightPad;
-  const height = chartH + topPad + bottomPad;
-
-  const maxAbs = niceMax(Math.max(...weeks.map(w => Math.abs(w.profit))));
-  const zeroY = topPad + chartH / 2;
-  const yScale = v => (v / maxAbs) * (chartH / 2);
-
-  const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, style: 'display:block; font-family:inherit;' });
-
-  const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs];
-  ticks.forEach(v => {
-    const y = zeroY - yScale(v);
-    svg.appendChild(el('line', { x1: leftPad, x2: width - rightPad, y1: y, y2: y, stroke: v === 0 ? 'var(--baseline)' : 'var(--grid)', 'stroke-width': 1 }));
-    const t = el('text', { x: leftPad - 8, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: 'var(--text-muted)' });
-    t.textContent = (v / 10000).toLocaleString('ko-KR') + '만';
-    svg.appendChild(t);
-  });
-
-  weeks.forEach((w, i) => {
-    const gx = leftPad + i * groupW + (groupW - barW) / 2;
-    const isPos = w.profit >= 0;
-    const barH = Math.abs(yScale(w.profit));
-    const y = isPos ? zeroY - barH : zeroY;
-    const rect = el('rect', {
-      x: gx, y: y, width: barW, height: Math.max(barH, 0.5),
-      fill: isPos ? 'var(--pos)' : 'var(--neg)',
-      rx: 3
-    });
-    rect.style.cursor = 'pointer';
-    rect.addEventListener('mousemove', (ev) => {
-      showTooltip(ev.clientX, ev.clientY, `<b>${w.label}</b><br>순수익 ${fmtWon(w.profit)}`);
-    });
-    rect.addEventListener('mouseleave', hideTooltip);
-    svg.appendChild(rect);
-
-    if (i % 4 === 0 || i === weeks.length - 1) {
-      const t = el('text', { x: gx + barW / 2, y: topPad + chartH + 16, 'text-anchor': 'middle', 'font-size': 9, fill: 'var(--text-muted)' });
-      t.textContent = w.label;
-      svg.appendChild(t);
-    }
-  });
-
-  document.getElementById('chart2-wrap').appendChild(svg);
-})();
-
-// ================= Table =================
-(function () {
-  const tbody = document.getElementById('table-body');
-  weeks.forEach(w => {
-    const tr = document.createElement('tr');
-    const profitClass = w.profit > 0 ? 'profit-pos' : (w.profit < 0 ? 'profit-neg' : '');
-    tr.innerHTML = `
-      <td>${w.week_start.slice(2).replace(/-/g,'.')} ~ ${w.week_end.slice(2).replace(/-/g,'.')}</td>
-      <td>${fmtNum(w.buy_count)}</td>
-      <td>${fmtNum(w.sell_count)}</td>
-      <td class="${profitClass}">${w.sell_count > 0 ? fmtWon(w.profit) : '-'}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-})();
-</script>
-
-<!-- =========================================================
-     🧪 저장 기능 체험: Firebase Firestore 연동
-     - 아래 firebaseConfig 값을 Firebase 콘솔에서 발급받은 값으로 교체하세요.
-     - console.firebase.google.com → 프로젝트 생성 → Firestore Database 활성화
-       → 프로젝트 개요에서 "</>" (웹 앱 추가) → 표시되는 설정값을 아래에 붙여넣기
-     - 이 블록만 지우면 원래 대시보드로 완전히 되돌아갑니다.
-     ========================================================= -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  // ↓↓↓ 여기를 본인의 Firebase 설정값으로 교체하세요 ↓↓↓
-const firebaseConfig = {
-  apiKey: "AIzaSyCEU9wLMNMgw0L3D56nIjhZ2mMfHbE37-4",
-  authDomain: "betest-3ff00.firebaseapp.com",
-  projectId: "betest-3ff00",
-  storageBucket: "betest-3ff00.firebasestorage.app",
-  messagingSenderId: "789251141661",
-  appId: "1:789251141661:web:447a1ffcd0716670dcd6f4"
+const REGION_COLOR = {
+  "데마시아": "#d9c48a", "녹서스": "#c4453d", "프렐요드": "#6fc0e6", "이오니아": "#e08fc0",
+  "자운": "#3fcf93", "필트오버": "#e0aa4a", "슈리마": "#e8b73c", "공허": "#9a63e0",
+  "그림자 군도": "#3fb59b", "빌지워터": "#e5793c", "요들": "#7f95ee", "타곤": "#ee7fa3",
+  "이쉬탈": "#58bd62", "룬테라": "#92a8c2", "카마보르": "#c27040"
 };
-  // ↑↑↑ 여기까지 ↑↑↑
+const CLASSES = ["전체", "전사", "마법사", "암살자", "탱커", "원거리 딜러", "서포터"];
 
-  const inputEl = document.getElementById('memo-input');
-  const btnEl = document.getElementById('memo-save-btn');
-  const listEl = document.getElementById('memo-list');
-  const statusEl = document.getElementById('memo-status');
+const $ = id => document.getElementById(id);
+let filter = "전체", busy = false, history = [];
+try { history = JSON.parse(localStorage.getItem("lolHist") || "[]").filter(n => CHAMPS.some(c => c.en === n)); } catch (e) {}
 
-  if (firebaseConfig.apiKey.startsWith('여기에')) {
-    statusEl.textContent = '⚠️ 아직 Firebase 설정값이 입력되지 않았습니다 (index.html 하단 firebaseConfig 참고).';
+function initials(en) {
+  const w = en.replace(/[^A-Za-z' &.]/g, "").split(/[ &.]+/).filter(Boolean);
+  return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase().replace("'", "");
+}
+function crest(c) {
+  const col = REGION_COLOR[c.region] || "#c8aa6e";
+  const id = "g" + Math.random().toString(36).slice(2, 8);
+  return `<svg viewBox="0 0 200 200" role="img" aria-label="${c.en} 문장">
+    <defs>
+      <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="${col}" stop-opacity=".95"/><stop offset="1" stop-color="#07111f"/>
+      </linearGradient>
+      <radialGradient id="${id}r" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    </defs>
+    <polygon points="100,6 182,53 182,147 100,194 18,147 18,53" fill="url(#${id})" stroke="#c8aa6e" stroke-width="4"/>
+    <polygon points="100,22 168,61 168,139 100,178 32,139 32,61" fill="#06101d" fill-opacity=".72" stroke="${col}" stroke-width="2"/>
+    <polygon points="100,22 168,61 168,139 100,178 32,139 32,61" fill="url(#${id}r)"/>
+    <text x="100" y="122" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="800" font-size="${initials(c.en).length > 1 ? 66 : 82}" fill="#f0e6d2" letter-spacing="2">${initials(c.en)}</text>
+    <path d="M62 150 H138" stroke="${col}" stroke-width="2" stroke-linecap="round"/>
+  </svg>`;
+}
+
+const DD_ID = { "Wukong":"MonkeyKing","Nunu & Willump":"Nunu","Kha'Zix":"Khazix","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kog'Maw":"KogMaw","Vel'Koz":"Velkoz","Rek'Sai":"RekSai","Bel'Veth":"Belveth","K'Sante":"KSante","LeBlanc":"Leblanc","Renata Glasc":"Renata" };
+function ddId(c) { return DD_ID[c.en] || c.en.replace(/[^A-Za-z]/g, ""); }
+function artUrl(c) { return "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/" + ddId(c) + "_0.jpg"; }
+
+function pool() { return CHAMPS.filter(c => filter === "전체" || c.cls === filter); }
+function updateCounter() { $("counter").textContent = `${filter === "전체" ? "전체" : filter} ${pool().length}명 중에서 뽑습니다`; }
+
+function show(c, anim, withArt) {
+  const el = $("crest");
+  if (withArt) {
+    el.className = "crest wide" + (anim ? " " + anim : "");
+    el.innerHTML = "";
+    const img = new Image();
+    img.alt = c.en + " 일러스트";
+    img.referrerPolicy = "no-referrer";
+    img.onerror = () => { el.className = "crest" + (anim ? " " + anim : ""); el.innerHTML = crest(c); };
+    img.src = artUrl(c);
+    el.append(img);
   } else {
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const memosCol = collection(db, 'demo_memos');
-
-    function renderMemos(snap) {
-      if (snap.empty) {
-        listEl.innerHTML = '<li class="memo-empty">아직 저장된 메모가 없습니다.</li>';
-        return;
-      }
-      listEl.innerHTML = '';
-      snap.forEach(doc => {
-        const data = doc.data();
-        const time = data.createdAt ? data.createdAt.toDate().toLocaleString('ko-KR') : '저장 중...';
-        const li = document.createElement('li');
-        const textSpan = document.createElement('span');
-        textSpan.textContent = data.text;
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'memo-time';
-        timeSpan.textContent = time;
-        li.appendChild(textSpan);
-        li.appendChild(timeSpan);
-        listEl.appendChild(li);
-      });
-    }
-
-    // getDocs로 매번 다시 불러오는 대신, onSnapshot으로 한 번만 구독합니다.
-    // 저장되는 순간 서버가 알아서 밀어주기 때문에 클릭할 때마다 왕복하지 않아
-    // 체감 속도가 훨씬 빨라지고, 다른 탭/기기에서 저장해도 실시간으로 반영됩니다.
-    listEl.innerHTML = '<li class="memo-empty">불러오는 중...</li>';
-    onSnapshot(
-      query(memosCol, orderBy('createdAt', 'desc')),
-      renderMemos,
-      (err) => {
-        listEl.innerHTML = '<li class="memo-empty">불러오기 실패 — Firestore 설정/보안규칙을 확인하세요.</li>';
-        console.error(err);
-      }
-    );
-
-    btnEl.addEventListener('click', async () => {
-      const text = inputEl.value.trim();
-      if (!text) return;
-      inputEl.value = '';
-      btnEl.disabled = true;
-      statusEl.textContent = '저장 중...';
-      try {
-        await addDoc(memosCol, { text, createdAt: serverTimestamp() });
-        statusEl.textContent = '저장 완료!';
-      } catch (err) {
-        statusEl.textContent = '저장 실패 — Firestore 설정/보안규칙을 확인하세요.';
-        console.error(err);
-      } finally {
-        btnEl.disabled = false;
-        setTimeout(() => { statusEl.textContent = ''; }, 1500);
-      }
-    });
-    inputEl.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') btnEl.click(); });
+    el.className = "crest" + (anim ? " " + anim : "");
+    el.innerHTML = crest(c);
   }
-</script>
+  $("name").textContent = c.ko;
+  $("en").textContent = c.en;
+}
+function showDetails(c) {
+  $("tags").innerHTML = "";
+  const t1 = document.createElement("span"); t1.className = "tag"; t1.textContent = c.cls;
+  const t2 = document.createElement("span"); t2.className = "tag region"; t2.textContent = c.region;
+  t2.style.setProperty("--rc", REGION_COLOR[c.region] || "#c8aa6e");
+  $("tags").append(t1, t2);
+  $("desc").textContent = c.desc;
+}
 
-</body>
-</html>
+function renderHistory() {
+  const ul = $("hist"); ul.innerHTML = "";
+  history.slice(0, 8).forEach(n => {
+    const c = CHAMPS.find(x => x.en === n); if (!c) return;
+    const li = document.createElement("li");
+    li.innerHTML = crest(c) + `<span></span>`;
+    li.lastChild.textContent = c.ko;
+    ul.append(li);
+  });
+  $("histEmpty").hidden = history.length > 0;
+}
+
+function roll() {
+  if (busy) return;
+  const list = pool(); if (!list.length) return;
+  busy = true; $("go").disabled = true;
+  const final = list[Math.floor(Math.random() * list.length)];
+  $("desc").textContent = "…"; $("tags").innerHTML = "";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let steps = reduce ? 1 : 16, i = 0, delay = 60;
+  (function tick() {
+    if (i < steps) {
+      show(list[Math.floor(Math.random() * list.length)], "spin");
+      i++; delay += 9; setTimeout(tick, delay);
+    } else {
+      show(final, "pop", true); showDetails(final);
+      history = [final.en, ...history.filter(n => n !== final.en)].slice(0, 8);
+      try { localStorage.setItem("lolHist", JSON.stringify(history)); } catch (e) {}
+      renderHistory();
+      busy = false; $("go").disabled = false; $("go").textContent = "다시 뽑기";
+    }
+  })();
+}
+
+CLASSES.forEach(c => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = c; b.setAttribute("aria-pressed", c === filter);
+  b.addEventListener("click", () => {
+    filter = c;
+    document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === b));
+    updateCounter();
+  });
+  $("filters").append(b);
+});
+$("go").addEventListener("click", roll);
+$("crest").innerHTML = crest({ en: "?", region: "룬테라" }).replace(/>\?</, ">?<");
+updateCounter(); renderHistory();
+document.querySelector(".sub").textContent = `전체 ${CHAMPS.length}명의 챔피언 중 한 명을 뽑아 보세요.`;
+</script>
